@@ -50,12 +50,409 @@ const ALLOWED_MIME_TYPES = [
   'audio/wav', 'audio/mp3', 'audio/aiff', 'audio/aac', 'audio/ogg', 'audio/flac'
 ];
 
+const ALLOWED_VIDEO_SOURCE_MIME_TYPES = [
+  'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'
+];
+
+const ALLOWED_CHAT_MODELS = [
+  'gemini-3-flash-preview',
+  'gemini-3.1-pro-preview',
+  'gemini-3.1-flash-lite-preview',
+  'gemini-2.5-flash-preview-tts'
+] as const;
+
+const ALLOWED_RESPONSE_MODALITIES = ['TEXT', 'IMAGE', 'AUDIO'] as const;
+const ALLOWED_THINKING_LEVELS = ['HIGH', 'STANDARD', 'LOW'] as const;
+const ALLOWED_IMAGE_ASPECT_RATIOS = ['1:1', '3:4', '4:3', '9:16', '16:9'] as const;
+const ALLOWED_IMAGE_SIZES = ['512px', '1K', '2K', '4K'] as const;
+const ALLOWED_PERSON_GENERATION = ['DONT_ALLOW', 'ALLOW_ADULT'] as const;
+const ALLOWED_VIDEO_ASPECT_RATIOS = ['1:1', '16:9', '9:16'] as const;
+const ALLOWED_VIDEO_RESOLUTIONS = ['720p', '1080p', '4K'] as const;
+const CHAT_ROUTE_LIMIT = '10mb';
+const DEFAULT_ROUTE_LIMIT = '1mb';
+const MAX_CONTENT_ITEMS = 50;
+const MAX_PARTS_PER_CONTENT = 20;
+const MAX_TEXT_PART_CHARS = 10_000;
+const MAX_SYSTEM_INSTRUCTION_CHARS = 5_000;
+const MAX_SYSTEM_INSTRUCTION_PARTS = 8;
+const MAX_INLINE_DATA_CHARS = 10_485_760;
+const MAX_PROMPT_CHARS = 2_000;
+const MAX_TOOLS = 2;
+const MAX_OPERATION_ID_LENGTH = 128;
+const chatJsonParser = express.json({ limit: CHAT_ROUTE_LIMIT });
+const defaultJsonParser = express.json({ limit: DEFAULT_ROUTE_LIMIT });
+
+type JsonRecord = Record<string, unknown>;
+
+function isPlainObject(value: unknown): value is JsonRecord {
+  return Object.prototype.toString.call(value) === '[object Object]';
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isIntegerInRange(value: unknown, min: number, max: number): value is number {
+  return Number.isInteger(value) && (value as number) >= min && (value as number) <= max;
+}
+
+function sendBadRequest(res: express.Response, message: string) {
+  return res.status(400).json({ error: message });
+}
+
+function sendServerError(res: express.Response, logLabel: string, error: unknown, message: string) {
+  console.error(logLabel, error);
+  return res.status(500).json({ error: message });
+}
+
+function getAiClient() {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
+  return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+}
+
+function validatePrompt(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const prompt = value.trim();
+  if (!prompt || prompt.length > MAX_PROMPT_CHARS) return null;
+  return prompt;
+}
+
+function validateSystemInstruction(value: unknown) {
+  if (typeof value === 'string') {
+    const instruction = value.trim();
+    if (!instruction || instruction.length > MAX_SYSTEM_INSTRUCTION_CHARS) return null;
+    return instruction;
+  }
+
+  if (!isPlainObject(value) || !Array.isArray(value.parts) || value.parts.length === 0 || value.parts.length > MAX_SYSTEM_INSTRUCTION_PARTS) {
+    return null;
+  }
+
+  const parts = value.parts.map((part) => {
+    if (!isPlainObject(part) || typeof part.text !== 'string') return null;
+    const text = part.text.trim();
+    if (!text || text.length > MAX_SYSTEM_INSTRUCTION_CHARS) return null;
+    return { text };
+  });
+
+  if (parts.some((part) => part === null)) return null;
+  return { parts: parts as Array<{ text: string }> };
+}
+
+function validateResponseModalities(value: unknown) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > ALLOWED_RESPONSE_MODALITIES.length) {
+    return null;
+  }
+
+  const seen = new Set<string>();
+  const modalities: string[] = [];
+
+  for (const modality of value) {
+    if (typeof modality !== 'string' || !ALLOWED_RESPONSE_MODALITIES.includes(modality as typeof ALLOWED_RESPONSE_MODALITIES[number]) || seen.has(modality)) {
+      return null;
+    }
+    seen.add(modality);
+    modalities.push(modality);
+  }
+
+  return modalities;
+}
+
+function validateSpeechConfig(value: unknown, responseModalities: string[] | undefined) {
+  if (!isPlainObject(value) || !responseModalities?.includes('AUDIO')) {
+    return null;
+  }
+
+  if (!isPlainObject(value.voiceConfig) || !isPlainObject(value.voiceConfig.prebuiltVoiceConfig)) {
+    return null;
+  }
+
+  const voiceName = value.voiceConfig.prebuiltVoiceConfig.voiceName;
+  if (typeof voiceName !== 'string') {
+    return null;
+  }
+
+  const trimmedVoiceName = voiceName.trim();
+  if (!trimmedVoiceName || trimmedVoiceName.length > 50) {
+    return null;
+  }
+
+  return {
+    voiceConfig: {
+      prebuiltVoiceConfig: {
+        voiceName: trimmedVoiceName
+      }
+    }
+  };
+}
+
+function validateThinkingConfig(value: unknown) {
+  if (!isPlainObject(value) || typeof value.thinkingLevel !== 'string') {
+    return null;
+  }
+
+  if (!ALLOWED_THINKING_LEVELS.includes(value.thinkingLevel as typeof ALLOWED_THINKING_LEVELS[number])) {
+    return null;
+  }
+
+  return { thinkingLevel: value.thinkingLevel };
+}
+
+function validateTools(value: unknown) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_TOOLS) {
+    return null;
+  }
+
+  const seen = new Set<string>();
+  const tools: Array<{ googleSearch?: {}; googleMaps?: {} }> = [];
+
+  for (const tool of value) {
+    if (!isPlainObject(tool)) return null;
+
+    const keys = Object.keys(tool);
+    if (keys.length !== 1) return null;
+
+    const toolName = keys[0];
+    const toolConfig = tool[toolName];
+    if (!['googleSearch', 'googleMaps'].includes(toolName) || !isPlainObject(toolConfig) || Object.keys(toolConfig).length > 0 || seen.has(toolName)) {
+      return null;
+    }
+
+    seen.add(toolName);
+    tools.push(toolName === 'googleSearch' ? { googleSearch: {} } : { googleMaps: {} });
+  }
+
+  return tools;
+}
+
+function validateChatContents(value: unknown) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_CONTENT_ITEMS) {
+    return null;
+  }
+
+  const safeContents = value.map((content) => {
+    if (!isPlainObject(content) || !Array.isArray(content.parts) || content.parts.length === 0 || content.parts.length > MAX_PARTS_PER_CONTENT) {
+      return null;
+    }
+
+    if (content.role !== undefined && (!['user', 'model', 'system'].includes(String(content.role)))) {
+      return null;
+    }
+
+    const safeParts = content.parts.map((part) => {
+      if (!isPlainObject(part)) return null;
+
+      const hasText = Object.prototype.hasOwnProperty.call(part, 'text');
+      const hasInlineData = Object.prototype.hasOwnProperty.call(part, 'inlineData');
+      if ((hasText ? 1 : 0) + (hasInlineData ? 1 : 0) !== 1) {
+        return null;
+      }
+
+      if (hasText) {
+        if (typeof part.text !== 'string' || part.text.length === 0 || part.text.length > MAX_TEXT_PART_CHARS) {
+          return null;
+        }
+        return { text: part.text };
+      }
+
+      if (!isPlainObject(part.inlineData) || typeof part.inlineData.mimeType !== 'string' || typeof part.inlineData.data !== 'string') {
+        return null;
+      }
+
+      if (!ALLOWED_MIME_TYPES.includes(part.inlineData.mimeType) || part.inlineData.data.length === 0 || part.inlineData.data.length > MAX_INLINE_DATA_CHARS) {
+        return null;
+      }
+
+      return {
+        inlineData: {
+          mimeType: part.inlineData.mimeType,
+          data: part.inlineData.data
+        }
+      };
+    });
+
+    if (safeParts.some((part) => part === null)) {
+      return null;
+    }
+
+    const role = typeof content.role === 'string' ? content.role : undefined;
+
+    return {
+      role,
+      parts: safeParts as Array<{ text?: string; inlineData?: { mimeType: string; data: string } }>
+    };
+  });
+
+  if (safeContents.some((content) => content === null)) {
+    return null;
+  }
+
+  return safeContents;
+}
+
+function validateChatConfig(value: unknown) {
+  if (value === undefined) return {};
+  if (!isPlainObject(value)) return null;
+
+  const safeConfig: JsonRecord = {};
+
+  if (value.temperature !== undefined) {
+    if (!isFiniteNumber(value.temperature)) return null;
+    safeConfig.temperature = Math.max(0, Math.min(2, value.temperature));
+  }
+
+  if (value.maxOutputTokens !== undefined) {
+    if (!isIntegerInRange(value.maxOutputTokens, 1, 8192)) return null;
+    safeConfig.maxOutputTokens = value.maxOutputTokens;
+  }
+
+  if (value.systemInstruction !== undefined) {
+    const systemInstruction = validateSystemInstruction(value.systemInstruction);
+    if (!systemInstruction) return null;
+    safeConfig.systemInstruction = systemInstruction;
+  }
+
+  let responseModalities: string[] | undefined;
+  if (value.responseModalities !== undefined) {
+    responseModalities = validateResponseModalities(value.responseModalities);
+    if (!responseModalities) return null;
+    safeConfig.responseModalities = responseModalities;
+  }
+
+  if (value.speechConfig !== undefined) {
+    const speechConfig = validateSpeechConfig(value.speechConfig, responseModalities);
+    if (!speechConfig) return null;
+    safeConfig.speechConfig = speechConfig;
+  }
+
+  if (value.thinkingConfig !== undefined) {
+    const thinkingConfig = validateThinkingConfig(value.thinkingConfig);
+    if (!thinkingConfig) return null;
+    safeConfig.thinkingConfig = thinkingConfig;
+  }
+
+  if (value.tools !== undefined) {
+    const tools = validateTools(value.tools);
+    if (!tools) return null;
+    safeConfig.tools = tools;
+  }
+
+  return safeConfig;
+}
+
+function validateImageConfig(value: unknown) {
+  if (value === undefined) return {};
+  if (!isPlainObject(value)) return null;
+
+  const safeConfig: JsonRecord = {};
+
+  if (value.imageConfig !== undefined) {
+    if (!isPlainObject(value.imageConfig)) return null;
+
+    const imageConfig: JsonRecord = {};
+    if (value.imageConfig.aspectRatio !== undefined) {
+      if (typeof value.imageConfig.aspectRatio !== 'string' || !ALLOWED_IMAGE_ASPECT_RATIOS.includes(value.imageConfig.aspectRatio as typeof ALLOWED_IMAGE_ASPECT_RATIOS[number])) {
+        return null;
+      }
+      imageConfig.aspectRatio = value.imageConfig.aspectRatio;
+    }
+
+    if (value.imageConfig.imageSize !== undefined) {
+      if (typeof value.imageConfig.imageSize !== 'string' || !ALLOWED_IMAGE_SIZES.includes(value.imageConfig.imageSize as typeof ALLOWED_IMAGE_SIZES[number])) {
+        return null;
+      }
+      imageConfig.imageSize = value.imageConfig.imageSize;
+    }
+
+    safeConfig.imageConfig = imageConfig;
+  }
+
+  if (value.personGeneration !== undefined) {
+    if (typeof value.personGeneration !== 'string' || !ALLOWED_PERSON_GENERATION.includes(value.personGeneration as typeof ALLOWED_PERSON_GENERATION[number])) {
+      return null;
+    }
+    safeConfig.personGeneration = value.personGeneration;
+  }
+
+  if (value.numberOfImages !== undefined) {
+    if (!isIntegerInRange(value.numberOfImages, 1, 4)) return null;
+    safeConfig.numberOfImages = value.numberOfImages;
+  }
+
+  return safeConfig;
+}
+
+function validateVideoImage(value: unknown) {
+  if (value === undefined) return undefined;
+  if (!isPlainObject(value)) return null;
+
+  if (typeof value.imageBytes !== 'string' || value.imageBytes.length === 0 || value.imageBytes.length > MAX_INLINE_DATA_CHARS) {
+    return null;
+  }
+
+  if (typeof value.mimeType !== 'string' || !ALLOWED_VIDEO_SOURCE_MIME_TYPES.includes(value.mimeType)) {
+    return null;
+  }
+
+  return {
+    imageBytes: value.imageBytes,
+    mimeType: value.mimeType
+  };
+}
+
+function validateVideoConfig(value: unknown) {
+  if (value === undefined) return {};
+  if (!isPlainObject(value)) return null;
+
+  const safeConfig: JsonRecord = {};
+
+  if (value.aspectRatio !== undefined) {
+    if (typeof value.aspectRatio !== 'string' || !ALLOWED_VIDEO_ASPECT_RATIOS.includes(value.aspectRatio as typeof ALLOWED_VIDEO_ASPECT_RATIOS[number])) {
+      return null;
+    }
+    safeConfig.aspectRatio = value.aspectRatio;
+  }
+
+  if (value.personGeneration !== undefined) {
+    if (typeof value.personGeneration !== 'string' || !ALLOWED_PERSON_GENERATION.includes(value.personGeneration as typeof ALLOWED_PERSON_GENERATION[number])) {
+      return null;
+    }
+    safeConfig.personGeneration = value.personGeneration;
+  }
+
+  if (value.numberOfVideos !== undefined) {
+    if (!isIntegerInRange(value.numberOfVideos, 1, 4)) return null;
+    safeConfig.numberOfVideos = value.numberOfVideos;
+  }
+
+  if (value.resolution !== undefined) {
+    if (typeof value.resolution !== 'string' || !ALLOWED_VIDEO_RESOLUTIONS.includes(value.resolution as typeof ALLOWED_VIDEO_RESOLUTIONS[number])) {
+      return null;
+    }
+    safeConfig.resolution = value.resolution;
+  }
+
+  return safeConfig;
+}
+
+function validateOperationId(value: unknown) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > MAX_OPERATION_ID_LENGTH) {
+    return null;
+  }
+
+  if (!/^operations\/[a-zA-Z0-9_-]+$/.test(value)) {
+    return null;
+  }
+
+  return value;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Use a smaller default limit, then override for specific routes if needed
-  app.use(express.json({ limit: '1mb' })); 
   app.use('/api/ai/', apiLimiter);
   app.use('/api/ai/', requireAuth);
 
@@ -65,215 +462,133 @@ async function startServer() {
   });
 
   // Chat route needs larger payload for inline images/video
-  app.post("/api/ai/chat", express.json({ limit: '10mb' }), async (req, res) => {
+  app.post("/api/ai/chat", chatJsonParser, async (req, res) => {
     try {
+      if (!isPlainObject(req.body)) {
+        return sendBadRequest(res, "Invalid request payload");
+      }
+
       const { model, contents, config } = req.body;
-      
-      // Validation
-      const ALLOWED_MODELS = [
-        'gemini-3-flash-preview',
-        'gemini-3.1-pro-preview',
-        'gemini-3.1-flash-lite-preview',
-        'gemini-2.5-flash-preview-tts'
-      ];
-      if (!model || !ALLOWED_MODELS.includes(model)) {
-        return res.status(400).json({ error: "Invalid model specified" });
-      }
-      if (!contents || !Array.isArray(contents) || contents.length === 0 || contents.length > 50) {
-        return res.status(400).json({ error: "Invalid contents payload" });
-      }
-      
-      const isValidContents = contents.every((c: any) => 
-        c && 
-        typeof c === 'object' && 
-        Array.isArray(c.parts) && 
-        c.parts.every((p: any) => {
-          if (!p || typeof p !== 'object') return false;
-          if (typeof p.text === 'string') return p.text.length <= 10000;
-          if (p.inlineData && typeof p.inlineData.mimeType === 'string' && typeof p.inlineData.data === 'string') {
-            return ALLOWED_MIME_TYPES.includes(p.inlineData.mimeType) && p.inlineData.data.length <= 10485760; // ~10MB base64
-          }
-          return false;
-        }) &&
-        (!c.role || ['user', 'model', 'system'].includes(c.role))
-      );
-      if (!isValidContents) {
-        return res.status(400).json({ error: "Malformed contents structure or invalid MIME type" });
-      }
-      
-      // Sanitize config
-      const safeConfig: any = {};
-      if (config && typeof config === 'object') {
-        if (typeof config.temperature === 'number') safeConfig.temperature = Math.max(0, Math.min(2, config.temperature));
-        if (typeof config.maxOutputTokens === 'number') safeConfig.maxOutputTokens = Math.max(1, Math.min(8192, config.maxOutputTokens));
-        
-        if (config.systemInstruction) {
-          if (typeof config.systemInstruction === 'string') {
-            safeConfig.systemInstruction = config.systemInstruction.substring(0, 5000);
-          } else if (typeof config.systemInstruction === 'object' && Array.isArray(config.systemInstruction.parts)) {
-            const validParts = config.systemInstruction.parts
-              .filter((p: any) => p && typeof p.text === 'string')
-              .map((p: any) => ({ text: p.text.substring(0, 5000) }));
-            if (validParts.length > 0) safeConfig.systemInstruction = { parts: validParts };
-          }
-        }
-        
-        if (config.responseModalities && Array.isArray(config.responseModalities)) {
-          const allowedModalities = ['TEXT', 'IMAGE', 'AUDIO'];
-          safeConfig.responseModalities = config.responseModalities.filter((m: any) => allowedModalities.includes(m));
-        }
-        
-        if (config.speechConfig && typeof config.speechConfig === 'object') {
-          safeConfig.speechConfig = {};
-          if (config.speechConfig.voiceConfig && typeof config.speechConfig.voiceConfig === 'object') {
-            safeConfig.speechConfig.voiceConfig = {};
-            if (config.speechConfig.voiceConfig.prebuiltVoiceConfig && typeof config.speechConfig.voiceConfig.prebuiltVoiceConfig === 'object') {
-              const voiceName = config.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName;
-              if (typeof voiceName === 'string' && voiceName.length < 50) {
-                safeConfig.speechConfig.voiceConfig.prebuiltVoiceConfig = { voiceName };
-              }
-            }
-          }
-        }
 
-        if (config.thinkingConfig && typeof config.thinkingConfig === 'object') {
-           if (['HIGH', 'STANDARD', 'LOW'].includes(config.thinkingConfig.thinkingLevel)) {
-             safeConfig.thinkingConfig = { thinkingLevel: config.thinkingConfig.thinkingLevel };
-           }
-        }
-        if (config.tools && Array.isArray(config.tools)) {
-          // Only allow specific tools and strip out any unexpected nested properties
-          safeConfig.tools = config.tools.filter((t: any) => {
-             if (t && typeof t === 'object') {
-                if (t.googleSearch && typeof t.googleSearch === 'object') return true;
-                if (t.googleMaps && typeof t.googleMaps === 'object') return true;
-             }
-             return false;
-          }).map((t: any) => {
-             if (t.googleSearch) return { googleSearch: {} };
-             if (t.googleMaps) return { googleMaps: {} };
-          });
-        }
+      if (typeof model !== 'string' || !ALLOWED_CHAT_MODELS.includes(model as typeof ALLOWED_CHAT_MODELS[number])) {
+        return sendBadRequest(res, "Invalid model specified");
       }
-      
-      const safeContents = contents.map((c: any) => {
-        const safeParts = c.parts.map((p: any) => {
-          if (typeof p.text === 'string') return { text: p.text.substring(0, 10000) };
-          if (p.inlineData) return { inlineData: { mimeType: p.inlineData.mimeType, data: p.inlineData.data } };
-          return null;
-        }).filter(Boolean);
-        
-        return {
-          role: c.role,
-          parts: safeParts
-        };
-      });
 
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const safeContents = validateChatContents(contents);
+      if (!safeContents) {
+        return sendBadRequest(res, "Malformed contents payload");
+      }
+
+      const safeConfig = validateChatConfig(config);
+      if (!safeConfig) {
+        return sendBadRequest(res, "Invalid chat config payload");
+      }
+
+      const ai = getAiClient();
       const response = await ai.models.generateContent({
         model,
         contents: safeContents,
         config: safeConfig
       });
       res.json(response);
-    } catch (error: any) {
-      console.error("AI Chat Error:", error);
-      res.status(500).json({ error: "An error occurred while processing your request." });
+    } catch (error) {
+      return sendServerError(res, "AI Chat Error:", error, "Unable to process your request right now.");
     }
   });
 
-  app.post("/api/ai/image", async (req, res) => {
+  app.post("/api/ai/image", defaultJsonParser, async (req, res) => {
     try {
-      const { prompt, config } = req.body;
-      
-      // Validation
-      if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0 || prompt.length > 2000) {
-        return res.status(400).json({ error: "Invalid or oversized prompt" });
+      if (!isPlainObject(req.body)) {
+        return sendBadRequest(res, "Invalid request payload");
       }
 
-      const safeConfig: any = {};
-      if (config && typeof config === 'object') {
-         if (config.imageConfig && typeof config.imageConfig === 'object') {
-            safeConfig.imageConfig = {};
-            if (config.imageConfig.aspectRatio && ['1:1', '3:4', '4:3', '9:16', '16:9'].includes(config.imageConfig.aspectRatio)) {
-               safeConfig.imageConfig.aspectRatio = config.imageConfig.aspectRatio;
-            }
-            if (config.imageConfig.imageSize && ['512px', '1K', '2K', '4K'].includes(config.imageConfig.imageSize)) {
-               safeConfig.imageConfig.imageSize = config.imageConfig.imageSize;
-            }
-         }
-         if (config.personGeneration && ['DONT_ALLOW', 'ALLOW_ADULT'].includes(config.personGeneration)) safeConfig.personGeneration = config.personGeneration;
-         if (typeof config.numberOfImages === 'number') safeConfig.numberOfImages = Math.max(1, Math.min(4, config.numberOfImages));
+      const prompt = validatePrompt(req.body.prompt);
+      if (!prompt) {
+        return sendBadRequest(res, "Invalid or oversized prompt");
       }
 
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const safeConfig = validateImageConfig(req.body.config);
+      if (!safeConfig) {
+        return sendBadRequest(res, "Invalid image config payload");
+      }
+
+      const ai = getAiClient();
       const response = await ai.models.generateContent({
         model: 'gemini-3.1-flash-image-preview',
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: safeConfig
       });
       res.json(response);
-    } catch (error: any) {
-      console.error("AI Image Error:", error);
-      res.status(500).json({ error: "An error occurred while generating the image." });
+    } catch (error) {
+      return sendServerError(res, "AI Image Error:", error, "Unable to generate an image right now.");
     }
   });
 
-  app.post("/api/ai/video", express.json({ limit: '10mb' }), async (req, res) => {
+  app.post("/api/ai/video", chatJsonParser, async (req, res) => {
     try {
-      const { prompt, image, config } = req.body;
-      
-      // Validation
-      if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0 || prompt.length > 2000) {
-        return res.status(400).json({ error: "Invalid or oversized prompt" });
-      }
-      if (image) {
-        if (!image.imageBytes || typeof image.imageBytes !== 'string' || image.imageBytes.length > 10485760) {
-           return res.status(400).json({ error: "Invalid image data or size" });
-        }
-        if (!image.mimeType || !ALLOWED_MIME_TYPES.includes(image.mimeType)) {
-           return res.status(400).json({ error: "Invalid image MIME type" });
-        }
+      if (!isPlainObject(req.body)) {
+        return sendBadRequest(res, "Invalid request payload");
       }
 
-      const safeConfig: any = {};
-      if (config && typeof config === 'object') {
-         if (config.aspectRatio && ['1:1', '16:9', '9:16'].includes(config.aspectRatio)) safeConfig.aspectRatio = config.aspectRatio;
-         if (config.personGeneration && ['DONT_ALLOW', 'ALLOW_ADULT'].includes(config.personGeneration)) safeConfig.personGeneration = config.personGeneration;
-         if (typeof config.numberOfVideos === 'number') safeConfig.numberOfVideos = Math.max(1, Math.min(4, config.numberOfVideos));
-         if (config.resolution && ['720p', '1080p', '4K'].includes(config.resolution)) safeConfig.resolution = config.resolution;
+      const prompt = validatePrompt(req.body.prompt);
+      if (!prompt) {
+        return sendBadRequest(res, "Invalid or oversized prompt");
       }
 
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const image = validateVideoImage(req.body.image);
+      if (req.body.image !== undefined && !image) {
+        return sendBadRequest(res, "Invalid video source image payload");
+      }
+
+      const safeConfig = validateVideoConfig(req.body.config);
+      if (!safeConfig) {
+        return sendBadRequest(res, "Invalid video config payload");
+      }
+
+      const ai = getAiClient();
       
-      let operation = await ai.models.generateVideos({
+      const operation = await ai.models.generateVideos({
         model: 'veo-3.1-fast-generate-preview',
         prompt,
         image,
         config: safeConfig
       });
 
-      res.json({ operationId: operation.name });
-    } catch (error: any) {
-      console.error("AI Video Error:", error);
-      res.status(500).json({ error: "An error occurred while generating the video." });
+      res.json({ operationId: encodeURIComponent(operation.name) });
+    } catch (error) {
+      return sendServerError(res, "AI Video Error:", error, "Unable to generate a video right now.");
     }
   });
 
   app.get("/api/ai/video-status/:id", async (req, res) => {
     try {
-      const id = req.params.id;
-      if (!id || typeof id !== 'string' || !/^operations\/[a-zA-Z0-9_-]+$/.test(id)) {
-         return res.status(400).json({ error: "Invalid operation ID format" });
+      const id = validateOperationId(req.params.id);
+      if (!id) {
+         return sendBadRequest(res, "Invalid operation ID format");
       }
 
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const ai = getAiClient();
       const operation = await ai.operations.getVideosOperation({ operation: { name: id } as any });
       res.json(operation);
-    } catch (error: any) {
-      console.error("AI Video Status Error:", error);
-      res.status(500).json({ error: "An error occurred while fetching video status." });
+    } catch (error) {
+      return sendServerError(res, "AI Video Status Error:", error, "Unable to fetch video status right now.");
     }
+  });
+
+  app.use((error: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (!req.path.startsWith('/api/ai/')) {
+      return next(error);
+    }
+
+    if ((error as { type?: unknown } | null)?.type === 'entity.too.large') {
+      return res.status(413).json({ error: "Request payload too large" });
+    }
+
+    if (error instanceof SyntaxError) {
+      return res.status(400).json({ error: "Malformed JSON payload" });
+    }
+
+    return sendBadRequest(res, "Invalid request payload");
   });
 
   // Vite middleware for development
