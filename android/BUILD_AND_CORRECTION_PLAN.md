@@ -1,150 +1,154 @@
 # BUILD_AND_CORRECTION_PLAN.md
 
-## Objective
-Finish the J.A.R.V.I.S. Interface app without damaging its premium UI. The project is already in a strong refinement phase. The remaining work is hardening, cleanup, performance tuning, and controlled polish.
+## Branch target
+This plan is specifically for the current **stable 2D `neo_final` branch**.
 
-## Working assumptions
-- The current version already includes `public/robot_model.glb`.
-- Protected AI flows remain server-routed.
-- `npm run lint` and `npm run build` should remain green after every task.
-- No task should flatten or simplify the current UI.
+## Mission
+Polish the app from top to bottom **without changing protected layout/composition** and without reactivating the 3D robot path.
 
-## Execution order
+## Current branch posture
+### Stable enough to proceed
+- `Robot2D` is live
+- split neural hooks exist
+- server AI routes are protected
+- redirect auth is active
+- lint/build passed in the last clean inspection for this branch
 
-### Phase 1. Freeze the visual contract and verify the base
-**Goal:** establish a trustworthy baseline before touching logic.
+### Remaining work is mostly
+- cleanup
+- hardening
+- polish
+- performance tuning
 
-Tasks:
-1. archive current screenshots of key views
-2. run `npm ci`, `npm run lint`, `npm run build`
-3. capture build chunk sizes
-4. note current console warnings/errors in dev
-5. confirm `robot_model.glb` loads successfully
+## Phase 0 - Freeze branch intent
+### Goal
+Make the branch identity impossible to misunderstand.
 
-Success criteria:
-- baseline receipts captured
-- no untracked visual regressions during later phases
+### Actions
+- Keep `Robot2D` authoritative.
+- Keep `Robot3D` parked/on hold.
+- Preserve center layout framing exactly.
+- Preserve left/right panel positions and bottom dock placement.
 
----
+### Verification
+- `src/App.tsx` still renders `Robot2D`
+- no runtime import path to `Robot3D`
 
-### Phase 2. Harden `server.ts`
-**Goal:** make the AI gateway stricter, safer, and easier to trust.
+## Phase 1 - Read-only inspection
+### Goal
+Collect receipts before changing anything.
 
-Tasks:
-1. tighten validation for `systemInstruction`
-2. strictly validate `responseModalities`
-3. sanitize `speechConfig` more aggressively
-4. validate allowed tool object shapes only
-5. validate image/video config objects with explicit allowlists
-6. ensure consistent generic client-facing error messages
-7. keep detailed logs server-side only
+### Actions
+- inspect core files
+- identify dead/stale code
+- identify unused imports
+- identify stale 3D references
+- identify remaining validation gaps
+- identify any build or lint warnings
 
-Success criteria:
-- malformed inputs rejected cleanly
-- valid requests still work
-- auth and rate limiting remain intact
+### Deliverable
+- issue list by file
+- priority-sorted action list
 
----
+## Phase 2 - Safe cleanup
+### Goal
+Remove confusion and dead weight without touching layout or behavior.
 
-### Phase 3. Reduce 3D/performance cost without losing the 3D assistant
-**Goal:** keep the premium assistant viewport while reducing browser weight.
+### Actions
+- quarantine or rename `Robot3D.tsx` if still in-tree
+- remove any unused `Robot3D` imports
+- update stale fallback copy in `Robot3D.tsx`
+- remove dead comments and dead helpers
+- remove unused imports
 
-Tasks:
-1. profile GLB size and R3F chunk size
-2. lazy-load `Robot3D` only when panel is visible
-3. audit Drei/Three imports for unnecessary weight
-4. update stale fallback copy to reflect real failure modes
-5. keep current visuals and interaction feel intact
+### Must not do
+- no layout changes
+- no theme changes
+- no panel movement
+- no robot redesign
 
-Success criteria:
-- `Robot3D` still works
-- fallback copy no longer wrongly says the asset is missing
-- chunking or load behavior improves measurably
+## Phase 3 - Server hardening
+### Goal
+Tighten security and validation without changing successful behavior.
 
----
+### Actions
+- tighten `systemInstruction` validation
+- tighten `responseModalities` validation
+- tighten `speechConfig` validation
+- tighten tool object validation
+- tighten image/video config validation
+- confirm client-facing errors stay generic
 
-### Phase 4. Clean `ChatInterface.tsx`
-**Goal:** reduce complexity without changing the visible UX contract.
+### Success criteria
+- routes remain functional
+- invalid payloads fail cleanly
+- auth/rate limiting remain intact
 
-Tasks:
-1. separate request-building helpers from JSX
-2. separate AI route callers into focused helpers
-3. remove stale/dead logic and unused imports
-4. keep mode behavior, personas, and persistence intact
-5. preserve all current controls and panel density
+## Phase 4 - Client robustness pass
+### Goal
+Make the UI behave cleanly under auth/network failures.
 
-Success criteria:
-- same UI and behavior
-- smaller, easier-to-read component structure
-- no dead code remains from the refactor
+### Actions
+- verify all protected AI actions handle missing auth cleanly
+- verify all server error cases render clean user-facing messages
+- verify chat/image/video UI states do not hang on failure
+- verify Firebase sign-in/out transitions are smooth
 
----
+## Phase 5 - UI polish pass
+### Goal
+Polish the existing design without changing protected composition.
 
-### Phase 5. Finalize the neural subsystem split
-**Goal:** complete maintainability polish after the hook decomposition.
+### Allowed work
+- improve `Robot2D` finish
+- refine glow and pulse behavior
+- improve hover/hotspot affordance
+- improve panel readability
+- improve typography spacing and density
+- refine micro-animations and scanline effects
+- improve chat field polish and responsiveness
 
-Tasks:
-1. trim dev logging volume
-2. confirm cleanup paths remain correct after split
-3. prevent accidental double-start of systems
-4. keep motion/audio/speech orchestration explicit
-5. confirm no regressions in transcript, audio data, or motion-driven user position
+### Forbidden work
+- no major layout redesign
+- no center frame rebuild
+- no panel reshuffle
+- no 3D reactivation
+- no generic dashboard restyle
 
-Success criteria:
-- slimmer orchestration hook
-- stable media cleanup
-- less console noise in dev
+## Phase 6 - Performance pass
+### Goal
+Reduce weight and improve responsiveness.
 
----
+### Actions
+- audit main chunk contributors
+- lazy-load noncritical areas where safe
+- trim heavy imports in app shell
+- profile motion/media update frequency
+- verify no unnecessary rerenders in robot/visualizer paths
 
-### Phase 6. Clean Firebase/persistence edges
-**Goal:** keep persistence behavior, but improve correctness and ergonomics.
+## Phase 7 - Final verification gate
+### Required commands
+```bash
+npm ci
+npm run lint
+npm run build
+```
 
-Tasks:
-1. remove stale imports and low-value noise
-2. keep cleaner app-facing Firestore errors
-3. ensure auth failure states are surfaced cleanly in UI
-4. verify message/task Firestore paths still behave correctly
+### Required runtime checks
+- login flow
+- start systems flow
+- chat send flow
+- image generation flow
+- video generation flow
+- sign-out flow
+- 2D robot panel renders correctly
+- no 3D path active
 
-Success criteria:
-- no persistence regression
-- clearer user-facing failures
-- no stale imports or dead auth logic
-
----
-
-### Phase 7. Final polish and release readiness pass
-**Goal:** ship a trustworthy refined build.
-
-Tasks:
-1. run full inspection again
-2. remove any dead code created during corrections
-3. verify no UI regression against baseline screenshots
-4. run final `npm ci`, `npm run lint`, `npm run build`
-5. produce final scorecard and remaining-risk list
-
-Success criteria:
-- green verification commands
-- no meaningful UI regressions
-- known risks are documented and finite
-
-## Must-not-break list
-- premium futuristic HUD styling
-- dense panel layout
-- persona switching
-- chat persistence
-- TTS route and fallback
-- server-routed AI boundary
-- 3D assistant viewport
-- auth-gated AI requests
-
-## Definition of done
-The app is considered ready for the next stage when:
-- lint passes
-- build passes
-- core AI routes remain functional
-- `Robot3D` remains intact
-- stale/dead code is trimmed
-- server validation is tightened
-- performance is improved or at least no worse
-- UI parity is preserved
+## Priority order summary
+1. Freeze branch intent
+2. Inspect read-only
+3. Safe cleanup
+4. Server hardening
+5. Client robustness
+6. UI polish
+7. Performance pass
+8. Full verification

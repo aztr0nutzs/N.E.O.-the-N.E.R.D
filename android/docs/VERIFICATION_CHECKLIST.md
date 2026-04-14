@@ -1,31 +1,40 @@
 # VERIFICATION_CHECKLIST.md
 
-## Required command receipts
-- [ ] `npm ci`
-- [ ] `npm run lint`
-- [ ] `npm run build`
+## Required commands
+```bash
+npm ci
+npm run lint
+npm run build
+```
 
-## Required functional checks
-- [ ] unauthenticated protected AI call is rejected or blocked client-side
-- [ ] authenticated chat flow still works
-- [ ] image flow still works
-- [ ] video generation flow still works or fails cleanly
-- [ ] `Robot3D` renders with `robot_model.glb`
-- [ ] `Robot3D` fallback text is accurate
-- [ ] speech recognition starts/stops correctly
-- [ ] media stream cleanup occurs on unmount
-- [ ] motion tracking still updates user position
-- [ ] Firestore message history still loads and persists correctly
+## Required manual checks
+### Auth
+- sign in works
+- sign out works
+- protected AI actions fail cleanly when signed out
 
-## Required regression checks
-- [ ] no flattening of UI
-- [ ] no major layout shifts
-- [ ] no dead controls introduced
-- [ ] no stale imports left behind
-- [ ] no new console spam beyond intended dev-only logs
+### Systems
+- boot sequence starts
+- media permission prompts behave correctly
+- speech recognition toggles correctly
+- motion detection path does not crash
 
-## Performance checks
-- [ ] capture build chunk sizes
-- [ ] note `Robot3D` chunk size
-- [ ] note main bundle size
-- [ ] if optimized, compare before/after numbers
+### UI
+- `Robot2D` renders in center frame
+- no `Robot3D` path is active
+- side panels render correctly
+- bottom dock remains intact
+- no layout shifts or panel relocations
+
+### AI
+- chat request works
+- image request works
+- video request works or fails cleanly
+- server errors are generic and user-safe
+
+## Required report fields
+- files changed
+- commands run
+- command results
+- protected UI preserved statement
+- `Robot2D` still authoritative statement

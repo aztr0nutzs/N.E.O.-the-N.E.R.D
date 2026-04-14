@@ -1,4 +1,4 @@
-import { Component, ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface Props {
@@ -41,12 +41,22 @@ export class ErrorBoundary extends Component<Props, State> {
           <h1 className="text-xl font-black tracking-tighter mb-2 uppercase">System Critical Error</h1>
           <p className="text-xs text-gray-500 mb-8 max-w-md text-center leading-relaxed">
             Neural link disrupted. Core subroutines have encountered an unrecoverable exception. 
-            Manual reboot will restore the tactical interface.
+            Manual reboot required to restore tactical interface.
           </p>
           <div className="bg-black/50 border border-red-500/30 p-4 rounded mb-8 w-full max-w-md overflow-hidden">
             <div className="text-[10px] text-red-400/70 mb-1 uppercase tracking-widest">Error Log</div>
             <div className="text-[10px] text-red-500 break-all font-bold">
-              {this.state.error?.message || 'Unknown System Fault'}
+              {(() => {
+                try {
+                  const parsed = JSON.parse(this.state.error?.message || '{}');
+                  if (parsed.error && parsed.operationType) {
+                    return `Database Access Denied (${parsed.operationType.toUpperCase()}): ${parsed.error}`;
+                  }
+                } catch (e) {
+                  // Not JSON, just return the raw message
+                }
+                return this.state.error?.message || 'Unknown System Fault';
+              })()}
             </div>
           </div>
           <button 

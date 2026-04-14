@@ -1,138 +1,138 @@
 # MASTER_INSPECTION.md
 
 ## Purpose
-Run a full, read-only, evidence-based inspection of the J.A.R.V.I.S. Interface project. The goal is to determine what is actually implemented, what is partially implemented, what is broken, what is stale, and what is risky for production.
+This document defines the **required deep inspection procedure** for the `neo_final` branch.
 
-## Strict rules
-- Do **not** modify files during inspection.
-- Do **not** assume a feature works because the UI suggests it does.
-- Do **not** infer correctness from a successful Vite build alone.
-- Do **not** ignore dead code, fallback drift, or stale imports.
-- Distinguish verified facts from inferred risks.
-- Trace real call paths before scoring.
+This branch is already in a good state. Inspection work must therefore focus on:
+- regressions
+- stale/dead code
+- hidden branch confusion around 2D vs 3D robot paths
+- server hardening gaps
+- polish blockers
+- performance debt
 
-## Required inspection scope
-### 1. Build and toolchain
-Inspect and report:
-- `package.json` scripts
-- dependency alignment
-- TypeScript setup
-- Vite setup
-- whether `npm ci`, `npm run lint`, and `npm run build` pass
-- chunk outputs and obvious performance warnings
+## Critical branch facts to verify every time
+1. `src/App.tsx` still renders `Robot2D` as the live center robot.
+2. `Robot3D` is not active in the live UI.
+3. `npm run lint` passes.
+4. `npm run build` passes.
+5. `/api/ai/*` routes remain server-routed, rate-limited, and auth-protected.
+6. The client still uses real Firebase ID tokens for protected AI calls.
+7. No client-side Gemini API key path has been reintroduced.
+8. Protected UI composition remains intact.
 
-### 2. Server gateway integrity
-Inspect `server.ts` for:
-- Express middleware ordering
-- auth enforcement on `/api/ai/*`
+## Strict inspection rules
+- **Do not modify files during inspection.**
+- **Do not assume a file is dead merely because it looks suspicious. Trace imports and use paths.**
+- **Do not report a regression unless it is verified by code path, command output, or asset absence.**
+- **Do not claim a feature is working just because the code looks plausible.**
+- **Do not ignore branch intent.** This is the stable 2D branch.
+
+## Required inspection outputs
+Every inspection report must include:
+1. Overall score out of 10
+2. Category scores
+3. Verified passes
+4. Verified blockers
+5. File-by-file findings
+6. Exact recommended next actions in priority order
+7. Verification receipts
+
+## Category scoring framework
+### Build Integrity
+Check:
+- `npm ci`
+- `npm run lint`
+- `npm run build`
+
+### Architecture / Separation
+Check:
+- server/client boundary
+- route ownership
+- whether branch intent is cleanly represented
+- whether split hooks remain separated by concern
+
+### AI / Server Boundary
+Check:
+- `/api/ai/chat`
+- `/api/ai/image`
+- `/api/ai/video`
+- `/api/ai/video-status/:id`
 - rate limiting
-- Gemini SDK usage correctness
-- request validation depth per route
-- response sanitization
-- error leakage
-- payload limits
+- auth enforcement
+- validation strictness
 
-### 3. Client AI orchestration
-Inspect `src/components/ChatInterface.tsx` for:
-- auth preconditions before protected requests
-- persona handling
-- model routing by mode
-- file upload conversion and transport
-- Firestore message persistence
-- TTS behavior and fallback behavior
-- stale code, dead modes, or over-coupled UI logic
+### Firebase / Auth
+Check:
+- redirect-based login flow
+- token retrieval before protected AI calls
+- sign-out path
+- Firestore error handling
 
-### 4. Neural/media subsystem
-Inspect:
+### UI / Visual Stability
+Check:
+- center layout unchanged
+- side panels unchanged structurally
+- 2D robot still active
+- no generic redesign drift
+
+### Cleanup / Code Hygiene
+Check:
+- unused imports
+- dead parked code
+- stale comments/copy
+- misleading fallback text
+- duplicate helpers
+
+### Performance / Bundle Health
+Check:
+- major bundle chunks
+- heavy imports
+- lazy loading behavior
+- motion/media loops
+
+## Mandatory file targets
+Always inspect at minimum:
+- `src/App.tsx`
+- `src/components/Robot2D.tsx`
+- `src/components/Robot3D.tsx`
+- `src/components/ChatInterface.tsx`
+- `src/firebase.ts`
+- `server.ts`
 - `src/hooks/useNeuralSystems.ts`
 - `src/hooks/useSpeechRecognition.ts`
 - `src/hooks/useMediaStream.ts`
 - `src/hooks/useMotionDetection.ts`
 - `src/context/NeuralContext.tsx`
+- `package.json`
+- `tsconfig.json`
+- `vite.config.ts`
 
-Verify:
-- cleanup correctness
-- stale closure risk
-- permission flow safety
-- browser API assumptions
-- console noise
-- over-centralization or maintainability problems
+## High-priority questions
+During every inspection, answer these explicitly:
+1. Is `Robot2D` still the active center robot?
+2. Has any code path reintroduced `Robot3D` into runtime?
+3. Are there any remaining stale references that imply 3D is active?
+4. Are protected AI routes still secure?
+5. Is server validation still strict enough?
+6. Do lint and build both pass?
+7. Did any cleanup/regression alter protected UI framing?
 
-### 5. 3D assistant path
-Inspect `src/components/Robot3D.tsx` and `public/robot_model.glb` for:
-- correct asset path
-- fallback behavior correctness
-- stale fallback copy
-- chunk/load cost implications
-- suspicious render-time work
-- likely runtime failure modes
+## Automatic blockers
+Mark as blocker immediately if any of the following are found:
+- `Robot3D` re-enabled in live UI without explicit branch change
+- `npm run lint` fails
+- `npm run build` fails
+- auth removed from `/api/ai/*`
+- client secret exposure reintroduced
+- fake anonymous token fallback reintroduced
+- protected UI composition materially changed without explicit approval
 
-### 6. Firebase/auth/persistence
-Inspect `src/firebase.ts`, Firestore usage, and rules-related assumptions for:
-- auth flow quality
-- Firestore initialization
-- error shaping
-- message/task collection paths
-- permission-related failure behavior
+## Default recommendation posture
+Because this branch is already good, default recommendations should be:
+- surgical
+- minimally invasive
+- file-specific
+- verification-backed
 
-### 7. UI contract preservation risk
-Inspect the premium interface for:
-- unintended placeholder fallback risk
-- brittle visual logic
-- areas likely to regress under AI-assisted edits
-- places where a “cleanup” pass could accidentally flatten visuals
-
-## Required outputs
-### A. Overall score
-Provide one overall score out of 10.
-
-### B. Category scores
-Score at minimum:
-- Build Integrity
-- Architecture / Separation
-- Gemini / AI Integration
-- Firebase / Auth / Persistence
-- Neural / Media Systems
-- UI / Visual Design
-- Asset Completeness
-- Runtime Resilience
-- Performance / Bundle Health
-- Production Readiness
-
-### C. Verified strengths
-List only what was actually verified.
-
-### D. Verified failures / blockers
-List only what was actually verified.
-
-### E. Inferred risks
-List plausible but not fully verified risks separately.
-
-### F. File-by-file findings
-At minimum include:
-- `server.ts`
-- `src/components/ChatInterface.tsx`
-- `src/components/Robot3D.tsx`
-- `src/hooks/useNeuralSystems.ts`
-- `src/hooks/useSpeechRecognition.ts`
-- `src/hooks/useMediaStream.ts`
-- `src/hooks/useMotionDetection.ts`
-- `src/firebase.ts`
-
-### G. Correction priorities
-Rank issues in execution order.
-
-## Inspection checklist
-- [ ] archive contents inspected
-- [ ] `public/robot_model.glb` presence verified
-- [ ] `npm ci` run
-- [ ] `npm run lint` run
-- [ ] `npm run build` run
-- [ ] `server.ts` AI routes traced
-- [ ] auth middleware traced
-- [ ] `ChatInterface.tsx` request flow traced
-- [ ] media hook cleanup traced
-- [ ] 3D fallback text checked
-- [ ] stale imports/dead code checked
-- [ ] chunk sizes reviewed
-- [ ] scores justified by evidence
+Do not recommend broad rewrites unless inspection proves structural failure.

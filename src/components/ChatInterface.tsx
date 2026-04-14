@@ -3,7 +3,7 @@ import { Send, Terminal, Image as ImageIcon, Search, MapPin, Brain, Zap, Video, 
 
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, serverTimestamp, getDocs } from 'firebase/firestore';
-import { useNeural } from '../context/NeuralContext';
+import { useNeural, Persona } from '../context/NeuralContext';
 
 interface Message {
   id?: string;
@@ -11,38 +11,13 @@ interface Message {
   content: string;
   imageUrl?: string;
   videoUrl?: string;
-  createdAt?: unknown;
+  audioData?: string;
+  createdAt?: any;
 }
 
-type ChatMode = 'standard' | 'search' | 'maps' | 'think' | 'fast' | 'vision' | 'image' | 'video' | 'tts';
-type Persona = 'NEO' | 'FRIDAY' | 'EDITH' | 'ULTRON';
+type ChatMode = 'standard' | 'search' | 'maps' | 'think' | 'fast' | 'vision' | 'image' | 'video' | 'tts' | 'live';
 type ImageSize = '512px' | '1K' | '2K' | '4K';
 type VideoAspectRatio = '16:9' | '9:16';
-type VoiceOptionMap = Record<Persona, string>;
-type ChatHistoryItem = { role: 'user' | 'model'; parts: Array<{ text: string }> };
-type ChatPart = { text: string } | { inlineData: { data: string; mimeType: string } };
-type ServerResponsePart = { text?: string; inlineData?: { data?: string } };
-type ServerResponse = {
-  error?: string;
-  candidates?: Array<{
-    content?: {
-      parts?: ServerResponsePart[];
-    };
-  }>;
-};
-type VideoStatusResponse = {
-  error?: string;
-  done?: boolean;
-  response?: {
-    generatedVideos?: Array<{
-      video?: {
-        uri?: string;
-      };
-    }>;
-  };
-};
-
-const DEFAULT_ASSISTANT_MESSAGE = 'Systems online. All protocols active. How may I assist you today, sir?';
 
 const PERSONA_CONFIGS = {
   NEO: {
@@ -69,312 +44,10 @@ const PERSONA_CONFIGS = {
     color: 'red-500',
     voiceURI: 'Google US English Male'
   }
-} as const;
-
-function getDefaultAssistantMessage(): Message {
-  return { role: 'assistant', content: DEFAULT_ASSISTANT_MESSAGE };
-}
-
-function getCurrentModelLabel(mode: ChatMode) {
-  if (mode === 'think') return 'gemini-3.1-pro-preview';
-  if (mode === 'fast') return 'gemini-3.1-flash-lite-preview';
-  if (mode === 'vision') return 'gemini-3.1-pro-preview';
-  if (mode === 'image') return 'imagen-3.0-generate-002';
-  if (mode === 'video') return 'veo-2.0-generate-001';
-  if (mode === 'tts') return 'gemini-2.5-flash-preview-tts';
-  return 'gemini-3-flash-preview';
-}
-
-function getServerVoiceName(persona: Persona) {
-  if (persona === 'NEO') return 'Charon';
-  if (persona === 'FRIDAY') return 'Kore';
-  if (persona === 'EDITH') return 'Zephyr';
-  return 'Fenrir';
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
-  });
-}
-
-function parseDataUrl(dataUrl: string) {
-  const [meta = '', base64Data = ''] = dataUrl.split(',');
-  const mimeType = meta.split(';')[0]?.split(':')[1] || 'application/octet-stream';
-  return { base64Data, mimeType };
-}
-
-function createAttachmentFields(dataUrl: string) {
-  const { mimeType } = parseDataUrl(dataUrl);
-
-  if (mimeType.startsWith('video/')) {
-    return { videoUrl: dataUrl };
-  }
-
-  return { imageUrl: dataUrl };
-}
-
-function buildMessageHistory(messages: Message[]): ChatHistoryItem[] {
-  return messages.slice(-10).map((message) => ({
-    role: message.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: message.content }]
-  }));
-}
-
-function buildRequestParts(userMessage: string, fileDataUrl: string): ChatPart[] {
-  const parts: ChatPart[] = [{ text: userMessage }];
-
-  if (!fileDataUrl) return parts;
-
-  const { base64Data, mimeType } = parseDataUrl(fileDataUrl);
-  parts.push({
-    inlineData: {
-      data: base64Data,
-      mimeType
-    }
-  });
-
-  return parts;
-}
-
-function buildChatRequestPayload({
-  mode,
-  userMessage,
-  fileDataUrl,
-  systemInstruction,
-  messages
-}: {
-  mode: ChatMode;
-  userMessage: string;
-  fileDataUrl: string;
-  systemInstruction: string;
-  messages: Message[];
-}) {
-  let model = 'gemini-3-flash-preview';
-  const config: Record<string, unknown> = { systemInstruction };
-
-  if (mode === 'think') {
-    model = 'gemini-3.1-pro-preview';
-    config.thinkingConfig = { thinkingLevel: 'HIGH' };
-  } else if (mode === 'fast') {
-    model = 'gemini-3.1-flash-lite-preview';
-  } else if (mode === 'search') {
-    config.tools = [{ googleSearch: {} }];
-  } else if (mode === 'maps') {
-    config.tools = [{ googleMaps: {} }];
-  }
-
-  const parts = buildRequestParts(userMessage, fileDataUrl);
-
-  if (fileDataUrl) {
-    const { mimeType } = parseDataUrl(fileDataUrl);
-    if (mode === 'vision' || mimeType.startsWith('video/')) {
-      model = 'gemini-3.1-pro-preview';
-    }
-  }
-
-  return {
-    model,
-    contents: [...buildMessageHistory(messages), { role: 'user' as const, parts }],
-    config
-  };
-}
-
-function buildImageRequestPayload(prompt: string, imageSize: ImageSize) {
-  return {
-    prompt,
-    config: {
-      imageConfig: {
-        aspectRatio: '1:1',
-        imageSize
-      }
-    }
-  };
-}
-
-function buildVideoRequestPayload(prompt: string, fileDataUrl: string, videoAspectRatio: VideoAspectRatio) {
-  const parsedFile = fileDataUrl ? parseDataUrl(fileDataUrl) : null;
-
-  return {
-    prompt,
-    image: parsedFile ? {
-      imageBytes: parsedFile.base64Data,
-      mimeType: parsedFile.mimeType
-    } : undefined,
-    config: {
-      numberOfVideos: 1,
-      resolution: '1080p',
-      aspectRatio: videoAspectRatio
-    }
-  };
-}
-
-function buildTtsRequestPayload(persona: Persona, text: string) {
-  return {
-    model: 'gemini-2.5-flash-preview-tts',
-    contents: [{ parts: [{ text: `Say in the persona of ${PERSONA_CONFIGS[persona].name}: ${text}` }] }],
-    config: {
-      responseModalities: ['AUDIO'],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: {
-            voiceName: getServerVoiceName(persona)
-          }
-        }
-      }
-    }
-  };
-}
-
-async function getIdTokenOrThrow() {
-  if (!auth.currentUser) throw new Error('User not authenticated');
-  return auth.currentUser.getIdToken();
-}
-
-async function readApiResponse<T>(response: Response): Promise<T> {
-  const data = await response.json();
-  if (!response.ok || data?.error) {
-    throw new Error(data?.error || `Request failed with status ${response.status}`);
-  }
-  return data as T;
-}
-
-async function postProtectedJson<T>(url: string, idToken: string, body: unknown): Promise<T> {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${idToken}`
-    },
-    body: JSON.stringify(body)
-  });
-
-  return readApiResponse<T>(response);
-}
-
-async function getProtectedJson<T>(url: string, idToken: string): Promise<T> {
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${idToken}`
-    }
-  });
-
-  return readApiResponse<T>(response);
-}
-
-function decodePcmBase64(base64Audio: string) {
-  const pcm = atob(base64Audio);
-  const buffer = new ArrayBuffer(pcm.length);
-  const bytes = new Uint8Array(buffer);
-
-  for (let index = 0; index < pcm.length; index++) {
-    bytes[index] = pcm.charCodeAt(index);
-  }
-
-  return buffer;
-}
-
-async function playServerTtsAudio(base64Audio: string) {
-  const buffer = decodePcmBase64(base64Audio);
-  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const audioBuffer = audioContext.createBuffer(1, buffer.byteLength / 2, 24000);
-  const channelData = audioBuffer.getChannelData(0);
-  const pcm = new Int16Array(buffer);
-
-  for (let index = 0; index < pcm.length; index++) {
-    channelData[index] = pcm[index] / 32768;
-  }
-
-  const source = audioContext.createBufferSource();
-  source.buffer = audioBuffer;
-  source.connect(audioContext.destination);
-  source.start();
-}
-
-function configureFallbackUtterance(
-  utterance: SpeechSynthesisUtterance,
-  persona: Persona,
-  voices: SpeechSynthesisVoice[],
-  selectedVoices: VoiceOptionMap
-) {
-  const voiceURI = selectedVoices[persona];
-  const voice = voices.find(candidate => candidate.voiceURI === voiceURI);
-
-  if (voice) {
-    utterance.voice = voice;
-  }
-
-  if (persona === 'ULTRON') {
-    utterance.pitch = 0.5;
-    utterance.rate = 0.85;
-    return;
-  }
-
-  if (persona === 'FRIDAY') {
-    utterance.pitch = 1.2;
-    utterance.rate = 1.1;
-    return;
-  }
-
-  utterance.pitch = 1.0;
-  utterance.rate = 1.0;
-}
-
-async function pollVideoGeneration(operationId: string, idToken: string) {
-  while (true) {
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    const operation = await getProtectedJson<VideoStatusResponse>(`/api/ai/video-status/${operationId}`, idToken);
-
-    if (!operation.done) continue;
-
-    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (!downloadLink) {
-      throw new Error('Video generation completed without a download link');
-    }
-
-    const videoResponse = await fetch(downloadLink);
-    if (!videoResponse.ok) {
-      throw new Error('Failed to download generated video');
-    }
-
-    const videoBlob = await videoResponse.blob();
-    return URL.createObjectURL(videoBlob);
-  }
-}
-
-function extractResponseText(data: ServerResponse) {
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
-}
-
-function extractImageResponse(data: ServerResponse) {
-  for (const part of data.candidates?.[0]?.content?.parts || []) {
-    if (part.inlineData?.data) {
-      return {
-        responseText: 'Image generated successfully, sir.',
-        generatedImageUrl: `data:image/png;base64,${part.inlineData.data}`
-      };
-    }
-  }
-
-  return {
-    responseText: 'No response generated.',
-    generatedImageUrl: ''
-  };
-}
+};
 
 export function ChatInterface() {
-  const {
-    user,
-    setNeuralSurge,
-    isListening,
-    toggleListening,
-    lastTranscript,
-    setCurrentModel
-  } = useNeural();
-
+  const { user, setNeuralSurge, isListening, toggleListening, lastTranscript, aiSettings, updateAISettings } = useNeural();
   const [persona, setPersona] = useState<Persona>('NEO');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -383,34 +56,43 @@ export function ChatInterface() {
   const [imageSize, setImageSize] = useState<ImageSize>('1K');
   const [videoAspectRatio, setVideoAspectRatio] = useState<VideoAspectRatio>('16:9');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [selectedVoices, setSelectedVoices] = useState<VoiceOptionMap>({
-    NEO: PERSONA_CONFIGS.NEO.voiceURI,
-    FRIDAY: PERSONA_CONFIGS.FRIDAY.voiceURI,
-    EDITH: PERSONA_CONFIGS.EDITH.voiceURI,
-    ULTRON: PERSONA_CONFIGS.ULTRON.voiceURI
-  });
-
+  
   const userId = user?.uid;
+  const { setCurrentModel } = useNeural();
+
+  useEffect(() => {
+    let modelName = 'gemini-3-flash-preview';
+    if (mode === 'think') modelName = 'gemini-3.1-pro-preview';
+    else if (mode === 'fast') modelName = 'gemini-3.1-flash-lite-preview';
+    else if (mode === 'vision') modelName = 'gemini-3.1-pro-preview';
+    else if (mode === 'image') modelName = 'imagen-3.0-generate-002';
+    else if (mode === 'video') modelName = 'veo-2.0-generate-001';
+    else if (mode === 'tts') modelName = 'gemini-2.5-flash-preview-tts';
+    
+    setCurrentModel(modelName);
+  }, [mode, setCurrentModel]);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    setCurrentModel(getCurrentModelLabel(mode));
-  }, [mode, setCurrentModel]);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   useEffect(() => {
     if (!userId) {
-      setMessages([getDefaultAssistantMessage()]);
+      setMessages([{ role: 'assistant', content: 'Systems online. All protocols active. How may I assist you today, sir?' }]);
       return;
     }
 
     const path = `users/${userId}/messages`;
-    const messageQuery = query(collection(db, path), orderBy('createdAt', 'asc'));
-
-    const unsubscribe = onSnapshot(messageQuery, (snapshot) => {
-      const loadedMessages = snapshot.docs.map(snapshotDoc => ({ id: snapshotDoc.id, ...snapshotDoc.data() } as Message));
-      setMessages(loadedMessages.length > 0 ? loadedMessages : [getDefaultAssistantMessage()]);
+    const q = query(collection(db, path), orderBy('createdAt', 'asc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const loadedMessages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
+      if (loadedMessages.length === 0) {
+        setMessages([{ role: 'assistant', content: 'Systems online. All protocols active. How may I assist you today, sir?' }]);
+      } else {
+        setMessages(loadedMessages);
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, path);
     });
@@ -422,30 +104,9 @@ export function ChatInterface() {
     const loadVoices = () => {
       const availableVoices = window.speechSynthesis.getVoices();
       setVoices(availableVoices);
-
-      setSelectedVoices(prev => {
-        const next = { ...prev };
-        (Object.keys(PERSONA_CONFIGS) as Persona[]).forEach(currentPersona => {
-          if (!next[currentPersona] || next[currentPersona] === PERSONA_CONFIGS[currentPersona].voiceURI) {
-            const found = availableVoices.find(voice =>
-              voice.name.includes(PERSONA_CONFIGS[currentPersona].voiceURI) ||
-              voice.voiceURI.includes(PERSONA_CONFIGS[currentPersona].voiceURI)
-            );
-            if (found) next[currentPersona] = found.voiceURI;
-          }
-        });
-        return next;
-      });
     };
-
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
-
-    return () => {
-      if (window.speechSynthesis.onvoiceschanged === loadVoices) {
-        window.speechSynthesis.onvoiceschanged = null;
-      }
-    };
   }, []);
 
   useEffect(() => {
@@ -454,48 +115,119 @@ export function ChatInterface() {
     }
   }, [lastTranscript, isListening]);
 
-  useEffect(() => {
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
   }, [messages]);
 
-  const speakText = async (text: string) => {
-    try {
-      const idToken = await getIdTokenOrThrow();
-      const data = await postProtectedJson<ServerResponse>(
-        '/api/ai/chat',
-        idToken,
-        buildTtsRequestPayload(persona, text)
-      );
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  };
 
-      const base64Audio = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (base64Audio) {
-        await playServerTtsAudio(base64Audio);
-        return;
+  const speakText = async (text: string) => {
+    const voiceName = aiSettings.personaVoices[persona] || aiSettings.defaultVoice;
+    const isGeminiVoice = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede', 'Zephyr'].includes(voiceName);
+
+    if (isGeminiVoice) {
+      // Use gemini-2.5-flash-preview-tts for high quality TTS via server
+      try {
+        if (!auth.currentUser) throw new Error("User not authenticated");
+        const idToken = await auth.currentUser.getIdToken();
+        const response = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            model: "gemini-2.5-flash-preview-tts",
+            contents: [{ parts: [{ text: `Say in the persona of ${PERSONA_CONFIGS[persona].name}: ${text}` }] }],
+            config: {
+              responseModalities: ['AUDIO' as any],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: { 
+                    voiceName: voiceName
+                  },
+                },
+              },
+            },
+          })
+        });
+
+        const data = await response.json();
+        const base64Audio = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (base64Audio) {
+          const audioData = atob(base64Audio);
+          const arrayBuffer = new ArrayBuffer(audioData.length);
+          const view = new Uint8Array(arrayBuffer);
+          for (let i = 0; i < audioData.length; i++) {
+            view[i] = audioData.charCodeAt(i);
+          }
+          
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          // The model returns raw PCM at 24000Hz
+          const audioBuffer = audioContext.createBuffer(1, view.length / 2, 24000);
+          const channelData = audioBuffer.getChannelData(0);
+          const int16View = new Int16Array(arrayBuffer);
+          for (let i = 0; i < int16View.length; i++) {
+            channelData[i] = int16View[i] / 32768;
+          }
+          
+          const source = audioContext.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(audioContext.destination);
+          source.start();
+          return;
+        }
+      } catch (error) {
+        console.error("Gemini TTS failed, falling back to Web Speech:", error);
       }
-    } catch (error) {
-      console.error('Gemini TTS failed, falling back to Web Speech:', error);
     }
 
+    // Fallback to Web Speech API
     if (!window.speechSynthesis) return;
-
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
+    
     utterance.onstart = () => setNeuralSurge(true);
     utterance.onend = () => setNeuralSurge(false);
+    
+    const voice = voices.find(v => v.voiceURI === voiceName) || voices.find(v => v.default);
+    
+    if (voice) {
+      utterance.voice = voice;
+    }
+    
+    if (persona === 'ULTRON') {
+      utterance.pitch = 0.5;
+      utterance.rate = 0.85;
+    } else if (persona === 'FRIDAY') {
+      utterance.pitch = 1.2;
+      utterance.rate = 1.1;
+    } else {
+      utterance.pitch = 1.0;
+      utterance.rate = 1.0;
+    }
 
-    configureFallbackUtterance(utterance, persona, voices, selectedVoices);
     window.speechSynthesis.speak(utterance);
   };
 
-  const saveMessage = async (message: Message) => {
+  const saveMessage = async (msg: Message) => {
     if (!userId) return;
-
     const newId = Date.now().toString() + Math.random().toString(36).substring(7);
     const path = `users/${userId}/messages/${newId}`;
-
     try {
       await setDoc(doc(db, `users/${userId}/messages`, newId), {
-        ...message,
+        ...msg,
         createdAt: serverTimestamp()
       });
     } catch (error) {
@@ -505,22 +237,31 @@ export function ChatInterface() {
 
   const clearHistory = async () => {
     if (!userId) return;
-
-    const rebootMessage = { role: 'assistant' as const, content: 'Memory wiped. Systems rebooted.' };
-    setMessages([rebootMessage]);
+    
+    // Optimistically clear local state
+    setMessages([{ role: 'assistant', content: 'Memory wiped. Systems rebooted.' }]);
 
     try {
+      // Delete all messages from Firestore
       const path = `users/${userId}/messages`;
-      const historyQuery = query(collection(db, path));
-      const snapshot = await getDocs(historyQuery);
+      const q = query(collection(db, path));
+      const snapshot = await getDocs(q);
+      
+      const deletePromises = snapshot.docs.map(docSnapshot => 
+        deleteDoc(doc(db, path, docSnapshot.id))
+      );
+      
+      await Promise.all(deletePromises);
 
-      await Promise.all(snapshot.docs.map((snapshotDoc) => deleteDoc(doc(db, path, snapshotDoc.id))));
-      await setDoc(doc(db, path, Date.now().toString()), {
-        ...rebootMessage,
+      // Add the reboot message
+      const newId = Date.now().toString();
+      await setDoc(doc(db, path, newId), {
+        role: 'assistant',
+        content: 'Memory wiped. Systems rebooted.',
         createdAt: serverTimestamp()
       });
     } catch (error) {
-      console.error('Error clearing history:', error);
+      console.error("Error clearing history:", error);
     }
   };
 
@@ -529,87 +270,184 @@ export function ChatInterface() {
     if ((!input.trim() && !selectedFile) || isLoading) return;
 
     const userMessage = input.trim();
-    const fileDataUrl = selectedFile ? await fileToBase64(selectedFile) : '';
-    const userAttachment = fileDataUrl ? createAttachmentFields(fileDataUrl) : {};
+    let fileDataUrl = '';
+    
+    if (selectedFile) {
+      fileDataUrl = await fileToBase64(selectedFile);
+    }
 
     setInput('');
     setSelectedFile(null);
-
-    const newUserMsg: Message = {
-      role: 'user',
-      content: userMessage,
-      ...userAttachment
-    };
-
+    
+    const newUserMsg: Message = { role: 'user', content: userMessage, imageUrl: fileDataUrl };
+    // Optimistic update
     setMessages(prev => [...prev, newUserMsg]);
     setIsLoading(true);
+
+    // Save user message to Firestore
     await saveMessage(newUserMsg);
     setNeuralSurge(true);
 
     try {
-      const idToken = await getIdTokenOrThrow();
-      const systemInstruction = PERSONA_CONFIGS[persona].instruction;
-
       let responseText = '';
       let generatedImageUrl = '';
       let generatedVideoUrl = '';
 
-      if (mode === 'image') {
-        const data = await postProtectedJson<ServerResponse>(
-          '/api/ai/image',
-          idToken,
-          buildImageRequestPayload(userMessage, imageSize)
-        );
-        const imageResponse = extractImageResponse(data);
-        responseText = imageResponse.responseText;
-        generatedImageUrl = imageResponse.generatedImageUrl;
-      } else if (mode === 'video') {
-        const data = await postProtectedJson<{ operationId?: string }>(
-          '/api/ai/video',
-          idToken,
-          buildVideoRequestPayload(userMessage, fileDataUrl, videoAspectRatio)
-        );
+      const systemInstruction = `${PERSONA_CONFIGS[persona].instruction}\n\n${aiSettings.customInstructions}`.trim();
 
-        if (!data.operationId) {
-          throw new Error('Failed to start video generation');
+      if (!auth.currentUser) throw new Error("User not authenticated");
+      const idToken = await auth.currentUser.getIdToken();
+
+      if (mode === 'image') {
+        const response = await fetch('/api/ai/image', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            prompt: userMessage,
+            config: {
+              imageConfig: {
+                aspectRatio: '1:1',
+                imageSize: imageSize as any
+              }
+            }
+          })
+        });
+        
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+
+        for (const part of data.candidates[0].content.parts) {
+          if (part.inlineData) {
+            generatedImageUrl = `data:image/png;base64,${part.inlineData.data}`;
+            responseText = "Image generated successfully, sir.";
+          }
+        }
+      } else if (mode === 'video') {
+        const response = await fetch('/api/ai/video', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            prompt: userMessage,
+            image: fileDataUrl ? {
+              imageBytes: fileDataUrl.split(',')[1],
+              mimeType: fileDataUrl.split(';')[0].split(':')[1]
+            } : undefined,
+            config: {
+              numberOfVideos: 1,
+              resolution: '1080p',
+              aspectRatio: videoAspectRatio as any
+            }
+          })
+        });
+
+        const { operationId } = await response.json();
+        if (!operationId) throw new Error("Failed to start video generation");
+
+        let done = false;
+        while (!done) {
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          const statusRes = await fetch(`/api/ai/video-status/${operationId}`, {
+            headers: { 'Authorization': `Bearer ${idToken}` }
+          });
+          const operation = await statusRes.json();
+          if (operation.done) {
+            done = true;
+            const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+            if (downloadLink) {
+              // Note: The download link might still need the key if it's a direct GCS link, 
+              // but we can proxy the download too if needed. For now, we'll try to fetch it.
+              const videoResponse = await fetch(downloadLink);
+              const videoBlob = await videoResponse.blob();
+              generatedVideoUrl = URL.createObjectURL(videoBlob);
+              responseText = "Video generation complete, sir.";
+            }
+          }
+        }
+      } else {
+        let modelName = 'gemini-3-flash-preview';
+        let config: any = { 
+          systemInstruction,
+          temperature: aiSettings.temperature,
+          topP: aiSettings.topP,
+          topK: aiSettings.topK
+        };
+
+        if (mode === 'think') {
+          modelName = 'gemini-3.1-pro-preview';
+          config.thinkingConfig = { thinkingLevel: 'HIGH' };
+        } else if (mode === 'fast') {
+          modelName = 'gemini-3.1-flash-lite-preview';
+        } else if (mode === 'vision' && fileDataUrl) {
+          modelName = 'gemini-3.1-pro-preview';
+        } else if (mode === 'search') {
+          config.tools = [{ googleSearch: {} }];
+        } else if (mode === 'maps') {
+          config.tools = [{ googleMaps: {} }];
         }
 
-        generatedVideoUrl = await pollVideoGeneration(data.operationId, idToken);
-        responseText = 'Video generation complete, sir.';
-      } else {
-        const data = await postProtectedJson<ServerResponse>(
-          '/api/ai/chat',
-          idToken,
-          buildChatRequestPayload({
-            mode,
-            userMessage,
-            fileDataUrl,
-            systemInstruction,
-            messages
-          })
-        );
+        const parts: any[] = [{ text: userMessage }];
+        if (fileDataUrl) {
+          const base64Data = fileDataUrl.split(',')[1];
+          const mimeType = fileDataUrl.split(';')[0].split(':')[1];
+          parts.push({
+            inlineData: {
+              data: base64Data,
+              mimeType
+            }
+          });
+          
+          if (mimeType.startsWith('video/')) {
+            modelName = 'gemini-3.1-pro-preview';
+          }
+        }
 
-        responseText = extractResponseText(data);
+        const history = messages.slice(-10).map(m => ({
+          role: m.role,
+          parts: [{ text: m.content }]
+        }));
+
+        const response = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            model: modelName,
+            contents: [...history, { role: 'user', parts }],
+            config
+          })
+        });
+
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+
+        responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
       }
 
-      const newAssistantMsg: Message = {
-        role: 'assistant',
+      const newAssistantMsg: Message = { 
+        role: 'assistant', 
         content: responseText,
         imageUrl: generatedImageUrl,
         videoUrl: generatedVideoUrl
       };
 
+      // Save assistant message to Firestore
       await saveMessage(newAssistantMsg);
 
       if (mode === 'tts') {
-        await speakText(responseText);
+        speakText(responseText);
       }
+
     } catch (error) {
-      console.error('Error calling Gemini:', error);
-      const errorMsg: Message = {
-        role: 'assistant',
-        content: 'Error: Connection to main servers disrupted. ' + (error as Error).message
-      };
+      console.error("Error calling Gemini:", error);
+      const errorMsg: Message = { role: 'assistant', content: 'Error: Connection to main servers disrupted. ' + (error as Error).message };
       setMessages(prev => [...prev, errorMsg]);
       await saveMessage(errorMsg);
     } finally {
@@ -624,6 +462,7 @@ export function ChatInterface() {
         e.preventDefault();
         handleSubmit();
       }
+      // If only Enter is pressed, it will naturally create a new line in textarea
     }
   };
 
@@ -674,7 +513,7 @@ export function ChatInterface() {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={clearHistory} className="text-gray-500 hover:text-red-500 transition-colors" title="Clear History" aria-label="Clear conversation history">
+          <button onClick={clearHistory} className="text-gray-500 hover:text-red-500 transition-colors" title="Clear History">
             <Trash2 className="w-3 h-3" />
           </button>
           <div className={`text-[10px] font-mono text-${activeColor} animate-pulse flex items-center gap-1`}>
@@ -715,20 +554,6 @@ export function ChatInterface() {
           >
             <option value="16:9">16:9</option>
             <option value="9:16">9:16</option>
-          </select>
-        )}
-
-        {mode === 'tts' && voices.length > 0 && (
-          <select 
-            value={selectedVoices[persona]}
-            onChange={(e) => setSelectedVoices(prev => ({ ...prev, [persona]: e.target.value }))}
-            className="bg-black/80 border border-orange-400/50 text-orange-400 text-[9px] font-mono rounded px-1 py-0.5 focus:outline-none focus:border-orange-400 max-w-[100px]"
-          >
-            {voices.map(voice => (
-              <option key={voice.voiceURI} value={voice.voiceURI}>
-                {voice.name}
-              </option>
-            ))}
           </select>
         )}
       </div>
@@ -778,7 +603,7 @@ export function ChatInterface() {
         {selectedFile && (
           <div className="text-xs text-neon-green font-mono flex items-center gap-2 bg-black/50 p-1 rounded w-fit">
             <ImageIcon className="w-3 h-3" /> {selectedFile.name}
-            <button type="button" onClick={() => setSelectedFile(null)} className="text-red-500 hover:text-red-400 ml-2" aria-label="Remove selected attachment"><X className="w-3 h-3"/></button>
+            <button type="button" onClick={() => setSelectedFile(null)} className="text-red-500 hover:text-red-400 ml-2"><X className="w-3 h-3"/></button>
           </div>
         )}
         
@@ -789,15 +614,13 @@ export function ChatInterface() {
             onChange={handleFileChange}
             className="hidden"
             accept="image/*,video/*"
-            aria-label="Attach image or video"
           />
           <div className="absolute left-2 bottom-2 flex gap-1 z-10">
             <button 
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              aria-label="Attach image or video"
               className="p-1.5 text-gray-500 hover:text-white transition-colors"
-              title="Attach Image or Video"
+              title="Attach Image"
             >
               <ImageIcon className="w-4 h-4" />
             </button>
@@ -805,7 +628,6 @@ export function ChatInterface() {
             <button 
               type="button"
               onClick={toggleListening}
-              aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
               className={`p-1.5 transition-colors ${isListening ? 'text-red-500 animate-pulse drop-shadow-[0_0_5px_#ef4444]' : 'text-gray-500 hover:text-white'}`}
               title="Voice Input"
             >
@@ -817,8 +639,7 @@ export function ChatInterface() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Awaiting input for ${PERSONA_CONFIGS[persona].name}... (Shift+Enter transmits)`}
-            aria-label={`Message input for ${PERSONA_CONFIGS[persona].name}`}
+            placeholder={`Awaiting input for ${PERSONA_CONFIGS[persona].name}... (Shift+Enter to send)`}
             className={`w-full bg-black/60 border border-white/10 rounded-lg py-2.5 pl-20 pr-12 text-white font-mono text-xs focus:outline-none focus:border-${activeColor}/50 focus:ring-1 focus:ring-${activeColor}/50 placeholder-gray-600 transition-all shadow-[0_0_10px_rgba(0,0,0,0.5)_inset] group-hover/input:border-white/20 min-h-[42px] max-h-[120px] resize-none custom-scrollbar`}
             disabled={isLoading}
             rows={1}
@@ -827,8 +648,6 @@ export function ChatInterface() {
           <button 
             type="submit"
             disabled={isLoading || (!input.trim() && !selectedFile)}
-            aria-label="Transmit message"
-            title="Transmit Message"
             className={`absolute right-1.5 bottom-1.5 p-1.5 text-${activeColor} hover:text-white hover:bg-${activeColor}/20 rounded transition-colors disabled:opacity-50 disabled:hover:bg-transparent z-10`}
           >
             <Send className="w-4 h-4" />

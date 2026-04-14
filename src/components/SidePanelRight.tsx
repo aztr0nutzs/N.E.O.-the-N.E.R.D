@@ -1,8 +1,8 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Cpu, Database, Network, Power, Settings } from 'lucide-react';
 
-export function SidePanelRight() {
+export function SidePanelRight({ onToggleSettings }: { onToggleSettings?: () => void }) {
   const [cpuLoad, setCpuLoad] = useState(42);
   const [ramLoad, setRamLoad] = useState(65);
   const [netLoad, setNetLoad] = useState(12);
@@ -45,7 +45,10 @@ export function SidePanelRight() {
         <button className="w-full py-1 text-[8px] font-mono uppercase tracking-widest border border-neon-green/30 text-neon-green hover:bg-neon-green/10 rounded transition-colors">
           Prioritize
         </button>
-        <button className="w-full py-1 text-[8px] font-mono uppercase tracking-widest border border-cyber-blue/30 text-cyber-blue hover:bg-cyber-blue/10 rounded transition-colors flex items-center justify-center gap-1">
+        <button 
+          onClick={onToggleSettings}
+          className="w-full py-1 text-[8px] font-mono uppercase tracking-widest border border-cyber-blue/30 text-cyber-blue hover:bg-cyber-blue/10 rounded transition-colors flex items-center justify-center gap-1"
+        >
           <Settings className="w-2 h-2" />
           Settings
         </button>
@@ -60,7 +63,7 @@ export function SidePanelRight() {
   );
 }
 
-function StatBar({ label, value, icon, color }: { label: string, value: number, icon: ReactNode, color: 'blue' | 'red' | 'green' }) {
+function StatBar({ label, value, icon, color }: { label: string, value: number, icon: React.ReactNode, color: 'blue' | 'red' | 'green' }) {
   const barColor = color === 'red' ? 'bg-red-500' : color === 'green' ? 'bg-neon-green' : 'bg-cyber-blue';
   const glowColor = color === 'red' ? 'shadow-[0_0_8px_#ef4444]' : color === 'green' ? 'shadow-[0_0_8px_#39ff14]' : 'shadow-[0_0_8px_#00ffff]';
 

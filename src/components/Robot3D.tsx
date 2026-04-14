@@ -1,4 +1,9 @@
-import React, { useRef, useMemo, Suspense } from 'react';
+// ON HOLD - NOT ACTIVE IN neo_no3d build
+// This branch is 2D robot only
+// Do not re-enable Robot3D
+// Do not touch the center layout framing while polishing.
+
+import React, { useRef, useMemo, Suspense, useState, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { 
   Float, 
@@ -13,66 +18,21 @@ import { Group, MathUtils, Mesh, MeshStandardMaterial } from 'three';
 import { useNeural } from '../context/NeuralContext';
 import { AlertTriangle } from 'lucide-react';
 
-function ViewportFallback({
-  title,
-  detail,
-  tone = 'cyan'
-}: {
-  title: string;
-  detail: string;
-  tone?: 'cyan' | 'red';
-}) {
-  const iconClass = tone === 'red' ? 'text-red-500' : 'text-cyber-blue';
-  const borderClass = tone === 'red' ? 'border-red-500/40' : 'border-cyber-blue/30';
-  const titleClass = tone === 'red' ? 'text-red-500' : 'text-cyber-blue';
-
-  return (
-    <Html center>
-      <div className={`flex flex-col items-center gap-4 bg-black/80 p-6 rounded-lg border ${borderClass} backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.35)]`}>
-        <AlertTriangle className={`w-8 h-8 ${iconClass}`} />
-        <div className="flex flex-col items-center gap-2 text-center">
-          <span className={`text-xs font-mono uppercase tracking-[0.2em] ${titleClass}`}>
-            {title}
-          </span>
-          <span className="max-w-[230px] text-[10px] font-mono uppercase leading-relaxed text-gray-400">
-            {detail}
-          </span>
-        </div>
-      </div>
-    </Html>
-  );
-}
-
-function describe3DError(errorMessage: string) {
-  const normalized = errorMessage.toLowerCase();
-
-  if (normalized.includes('webgl')) {
-    return 'WebGL is unavailable or blocked on this device.';
-  }
-
-  if (normalized.includes('gltf') || normalized.includes('glb') || normalized.includes('decode') || normalized.includes('unexpected')) {
-    return 'The robot asset failed to load or may be corrupted.';
-  }
-
-  return 'The 3D runtime hit a rendering fault while initializing the assistant viewport.';
-}
-
-class ThreeErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; errorMessage: string }> {
+class ThreeErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
-    this.state = { hasError: false, errorMessage: '' };
+    this.state = { hasError: false };
   }
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, errorMessage: error?.message ?? '' };
-  }
+  static getDerivedStateFromError() { return { hasError: true }; }
   render() {
     if (this.state.hasError) {
       return (
-        <ViewportFallback
-          title="3D Viewport Unavailable"
-          detail={describe3DError(this.state.errorMessage)}
-          tone="red"
-        />
+        <Html center>
+          <div className="flex flex-col items-center gap-2 bg-red-500/20 p-4 rounded border border-red-500/40 backdrop-blur-md text-red-500 font-mono text-[10px] uppercase tracking-widest">
+            <AlertTriangle className="w-6 h-6 mb-1" />
+            3D Engine Failure
+          </div>
+        </Html>
       );
     }
     return this.props.children;
@@ -84,21 +44,6 @@ function RobotModel() {
   const groupRef = useRef<Group>(null);
   
   const { scene } = useGLTF('/robot_model.glb', true);
-  const emissiveMaterials = useMemo(() => {
-    const materials: MeshStandardMaterial[] = [];
-
-    scene.traverse((child) => {
-      if ((child as Mesh).isMesh) {
-        const mesh = child as Mesh;
-        const material = mesh.material;
-        if (material && !Array.isArray(material) && 'emissive' in material) {
-          materials.push(material as MeshStandardMaterial);
-        }
-      }
-    });
-
-    return materials;
-  }, [scene]);
 
   // Calculate audio intensity for reactive elements
   const { audioIntensity, audioAverage } = useMemo(() => {
@@ -158,14 +103,21 @@ function RobotModel() {
     groupRef.current.scale.setScalar(MathUtils.lerp(groupRef.current.scale.x, targetScale, lerpFactor * 1.5));
 
     // 4. Emissive Reactivity
-    const targetEmissive = (neuralSurge ? 2 : 0.2) + (audioIntensity * 6) + (audioAverage * 4);
-    for (const material of emissiveMaterials) {
-      material.emissiveIntensity = MathUtils.lerp(
-        material.emissiveIntensity,
-        targetEmissive,
-        lerpFactor * 3
-      );
-    }
+    scene.traverse((child) => {
+      if ((child as Mesh).isMesh) {
+        const mesh = child as Mesh;
+        if (mesh.material && 'emissive' in mesh.material) {
+          const mat = mesh.material as MeshStandardMaterial;
+          // Dynamically responsive to subtle changes
+          const targetEmissive = (neuralSurge ? 2 : 0.2) + (audioIntensity * 6) + (audioAverage * 4);
+          mat.emissiveIntensity = MathUtils.lerp(
+            mat.emissiveIntensity, 
+            targetEmissive, 
+            lerpFactor * 3
+          );
+        }
+      }
+    });
   });
 
   return (
@@ -178,14 +130,11 @@ function RobotModel() {
 function LoadingFallback() {
   return (
     <Html center>
-      <div className="flex flex-col items-center gap-4 bg-black/80 p-6 rounded-lg border border-cyber-blue/30 backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.35)]">
+      <div className="flex flex-col items-center gap-4 bg-black/80 p-6 rounded-lg border border-cyber-blue/30 backdrop-blur-md">
         <div className="w-12 h-12 border-4 border-cyber-blue border-t-transparent rounded-full animate-spin shadow-[0_0_15px_#00ffff]" />
-        <div className="flex flex-col items-center gap-2 text-center">
+        <div className="flex flex-col items-center gap-1">
           <span className="text-xs font-mono text-cyber-blue animate-pulse uppercase tracking-[0.2em]">
-            Initializing 3D Viewport
-          </span>
-          <span className="max-w-[230px] text-[10px] font-mono uppercase leading-relaxed text-gray-400">
-            Loading the live assistant model from /robot_model.glb.
+            Awaiting Neural Asset
           </span>
         </div>
       </div>
@@ -194,39 +143,6 @@ function LoadingFallback() {
 }
 
 export function Robot3D() {
-  const webglSupported = useMemo(() => {
-    if (typeof document === 'undefined') return true;
-
-    try {
-      const canvas = document.createElement('canvas');
-      return Boolean(
-        canvas.getContext('webgl2') ||
-        canvas.getContext('webgl') ||
-        canvas.getContext('experimental-webgl')
-      );
-    } catch {
-      return false;
-    }
-  }, []);
-
-  if (!webglSupported) {
-    return (
-      <div className="w-full h-full min-h-[400px] relative group cursor-grab active:cursor-grabbing">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <ViewportFallback
-            title="3D Viewport Unavailable"
-            detail="This device does not expose a working WebGL context for the live assistant render."
-            tone="red"
-          />
-        </div>
-        <div className="absolute inset-0 pointer-events-none border border-cyber-blue/10 rounded-lg overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyber-blue/20 to-transparent animate-scanline" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)] opacity-50" />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="w-full h-full min-h-[400px] relative group cursor-grab active:cursor-grabbing">
       <Canvas shadows dpr={[1, 2]}>
@@ -264,5 +180,3 @@ export function Robot3D() {
     </div>
   );
 }
-
-useGLTF.preload('/robot_model.glb');

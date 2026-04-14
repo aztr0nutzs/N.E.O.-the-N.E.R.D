@@ -1,6 +1,6 @@
-import { FirebaseError, initializeApp } from 'firebase/app';
+import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithRedirect, signOut } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
@@ -29,18 +29,12 @@ export enum OperationType {
   UPDATE = 'update',
   DELETE = 'delete',
   LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
 }
 
-interface AuthProviderInfo {
-  providerId: string;
-  displayName: string | null;
-  email: string | null;
-  photoUrl: string | null;
-}
-
-interface FirestoreErrorInfo {
+export interface FirestoreErrorInfo {
   error: string;
-  code?: string;
   operationType: OperationType;
   path: string | null;
   authInfo: {
@@ -49,63 +43,36 @@ interface FirestoreErrorInfo {
     emailVerified?: boolean;
     isAnonymous?: boolean;
     tenantId?: string | null;
-    providerInfo: AuthProviderInfo[];
-  };
-}
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  return String(error);
-}
-
-function getFirebaseErrorCode(error: unknown) {
-  if (!(error instanceof FirebaseError)) return undefined;
-  return error.code.replace(/^firestore\//, '');
-}
-
-function getAuthInfo() {
-  return {
-    userId: auth.currentUser?.uid,
-    email: auth.currentUser?.email,
-    emailVerified: auth.currentUser?.emailVerified,
-    isAnonymous: auth.currentUser?.isAnonymous,
-    tenantId: auth.currentUser?.tenantId,
-    providerInfo: auth.currentUser?.providerData.map((provider) => ({
-      providerId: provider.providerId,
-      displayName: provider.displayName,
-      email: provider.email,
-      photoUrl: provider.photoURL
-    })) ?? []
-  };
-}
-
-function logFirestoreError(errInfo: FirestoreErrorInfo) {
-  if (!import.meta.env.DEV) return;
-  console.error('Detailed Firestore Error:', JSON.stringify(errInfo, null, 2));
+    providerInfo?: any[];
+  }
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
-    error: getErrorMessage(error),
-    code: getFirebaseErrorCode(error),
-    authInfo: getAuthInfo(),
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
     operationType,
     path
-  };
-
-  logFirestoreError(errInfo);
-
-  if (errInfo.code === 'permission-denied' || errInfo.error.includes('Missing or insufficient permissions')) {
+  }
+  // Keep detailed logging for dev
+  console.error('Detailed Firestore Error: ', JSON.stringify(errInfo, null, 2));
+  
+  // Surface cleaner app-facing errors
+  const baseMessage = error instanceof Error ? error.message : String(error);
+  if (baseMessage.includes('Missing or insufficient permissions')) {
     throw new Error(`Permission denied while trying to ${operationType} data at ${path || 'unknown path'}.`);
   }
-
-  if (errInfo.code === 'unauthenticated') {
-    throw new Error(`Authentication required before trying to ${operationType} data.`);
-  }
-
-  if (errInfo.code === 'unavailable' || errInfo.code === 'deadline-exceeded') {
-    throw new Error(`Database temporarily unavailable during ${operationType} operation. Please try again.`);
-  }
-
   throw new Error(`Database error during ${operationType} operation. Please try again.`);
 }
