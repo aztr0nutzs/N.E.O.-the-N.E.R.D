@@ -28,7 +28,7 @@ export function Panel({ children, className, title, accentColor = 'blue', onClos
   return (
     <div 
       className={cn(
-        "relative bg-[#111318]/95 backdrop-blur-md p-5 flex flex-col",
+        "relative panel-sheen bg-[linear-gradient(180deg,rgba(21,24,31,0.96)_0%,rgba(14,17,23,0.98)_58%,rgba(12,14,19,0.98)_100%)] backdrop-blur-md p-5 flex flex-col shadow-[0_18px_40px_rgba(0,0,0,0.38)]",
         className
       )}
       style={{
@@ -50,11 +50,13 @@ export function Panel({ children, className, title, accentColor = 'blue', onClos
           clipPath: 'polygon(18px 0, calc(100% - 18px) 0, 100% 18px, 100% calc(100% - 18px), calc(100% - 18px) 100%, 18px 100%, 0 calc(100% - 18px), 0 18px)'
         }}
       />
+      <div className="absolute left-6 right-6 top-4 h-[2px] bg-gradient-to-r from-transparent via-cyber-blue/35 to-transparent animate-scanline pointer-events-none" />
+      <div className="absolute inset-[10px] rounded-[18px] border border-white/4 pointer-events-none" />
 
       {/* Hazard Stripes (Top and Bottom) */}
-      <div className="absolute top-[5px] left-[40px] right-[40px] h-2 opacity-60 pointer-events-none" 
+      <div className="absolute top-[5px] left-[40px] right-[40px] h-2 opacity-50 pointer-events-none" 
            style={{ backgroundImage: 'repeating-linear-gradient(45deg, #000 0, #000 10px, #a3e635 10px, #a3e635 20px)' }} />
-      <div className="absolute bottom-[5px] left-[40px] right-[40px] h-2 opacity-60 pointer-events-none" 
+      <div className="absolute bottom-[5px] left-[40px] right-[40px] h-2 opacity-50 pointer-events-none" 
            style={{ backgroundImage: 'repeating-linear-gradient(45deg, #000 0, #000 10px, #a3e635 10px, #a3e635 20px)' }} />
 
       {/* Corner Neon Lights (Blue) */}
@@ -70,10 +72,13 @@ export function Panel({ children, className, title, accentColor = 'blue', onClos
       <div className="absolute bottom-6 right-2 w-2 h-2 rounded-full bg-[#1a1d24] border border-[#4b5563] shadow-sm pointer-events-none" />
 
       {title && (
-        <div className="mb-3 border-b border-panel-border/50 pb-2 flex items-center justify-between relative z-10 mt-2">
-          <h2 className={cn("font-mono text-sm uppercase tracking-widest font-bold", textAccentClasses[accentColor])}>
-            {title}
-          </h2>
+        <div className="mb-3 border-b border-white/8 pb-2.5 flex items-center justify-between relative z-10 mt-2">
+          <div className="flex items-center gap-2">
+            <div className={cn("h-2.5 w-2.5 rounded-full border border-current/35", textAccentClasses[accentColor])} />
+            <h2 className={cn("font-mono text-sm uppercase tracking-[0.22em] font-bold leading-none", textAccentClasses[accentColor])}>
+              {title}
+            </h2>
+          </div>
           <div className="flex gap-3 items-center">
             <div className="flex gap-1">
               <div className="w-1.5 h-1.5 bg-orange-500 rounded-full shadow-[0_0_5px_#f97316] animate-pulse" />
@@ -83,7 +88,7 @@ export function Panel({ children, className, title, accentColor = 'blue', onClos
             {onClose && (
               <button 
                 onClick={onClose}
-                className="text-gray-400 hover:text-white hover:bg-red-500/20 rounded p-1 transition-colors focus:outline-none"
+                className="text-gray-400 hover:text-white hover:bg-red-500/15 hover:border-red-500/30 rounded-sm border border-transparent p-1 transition-all duration-200 focus:outline-none"
               >
                 <X className="w-4 h-4" />
               </button>

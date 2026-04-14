@@ -601,9 +601,10 @@ export function ChatInterface() {
       className="flex flex-col h-full w-full relative group p-1"
     >
       {/* Heavy Industrial Frame */}
-      <div className="absolute inset-0 bg-[#1a1d24] border-[3px] border-[#3a3f47] rounded-xl shadow-2xl overflow-hidden -z-10">
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,#1b1f27,#14171d)] border-[3px] border-[#3a3f47] rounded-xl shadow-[0_18px_42px_rgba(0,0,0,0.42)] overflow-hidden -z-10">
         {/* Metallic Texture */}
         <div className="absolute inset-0 opacity-10 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_20%,transparent_78%,rgba(0,0,0,0.22))]" />
         
         {/* Inner Glow */}
         <div className="absolute inset-0 shadow-[0_0_30px_rgba(0,255,255,0.05)_inset]" />
@@ -615,16 +616,16 @@ export function ChatInterface() {
         <div className="absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full bg-gray-700 border border-gray-600" />
       </div>
 
-      <div className="flex justify-between items-center mb-2 pb-1 border-b border-white/10 px-4 pt-2">
+      <div className="flex justify-between items-center mb-2 pb-2 border-b border-white/10 px-4 pt-2.5">
         <div className="flex gap-2">
           {(Object.keys(PERSONA_CONFIGS) as Persona[]).map(p => (
             <button
               key={p}
               onClick={() => setPersona(p)}
-              className={`text-[10px] font-mono px-2 py-1 rounded transition-all duration-300 ${
+              className={`text-[10px] font-mono px-2.5 py-1 rounded-sm transition-all duration-300 tracking-[0.16em] ${
                 persona === p 
-                  ? `bg-${PERSONA_CONFIGS[p].color}/20 text-${PERSONA_CONFIGS[p].color} border border-${PERSONA_CONFIGS[p].color}/50 shadow-[0_0_10px_currentColor]` 
-                  : 'text-gray-500 hover:text-gray-300 border border-transparent'
+                  ? `bg-${PERSONA_CONFIGS[p].color}/18 text-${PERSONA_CONFIGS[p].color} border border-${PERSONA_CONFIGS[p].color}/50 shadow-[0_0_10px_currentColor]` 
+                  : 'text-gray-500 hover:text-gray-300 border border-transparent hover:bg-white/5'
               }`}
             >
               {p}
@@ -632,25 +633,25 @@ export function ChatInterface() {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={clearHistory} className="text-gray-500 hover:text-red-500 transition-colors" title="Clear History">
+          <button onClick={clearHistory} className="text-gray-500 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 rounded-sm p-1 transition-all" title="Clear History">
             <Trash2 className="w-3 h-3" />
           </button>
-          <div className={`text-[10px] font-mono text-${activeColor} animate-pulse flex items-center gap-1`}>
+          <div className={`text-[10px] font-mono text-${activeColor} animate-pulse flex items-center gap-1 tracking-[0.18em]`}>
             <Shield className="w-3 h-3" /> SECURE LINK
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1.5 mb-3 items-center">
-        <button onClick={() => setMode('standard')} className={`p-1 rounded flex items-center gap-1 text-[10px] font-mono transition-colors ${mode === 'standard' ? 'bg-cyber-blue text-black shadow-[0_0_8px_#00ffff]' : 'text-cyber-blue hover:bg-cyber-blue/20'}`} title="Standard Chat"><Terminal className="w-3 h-3" /> STD</button>
-        <button onClick={() => setMode('fast')} className={`p-1 rounded flex items-center gap-1 text-[10px] font-mono transition-colors ${mode === 'fast' ? 'bg-neon-green text-black shadow-[0_0_8px_#39ff14]' : 'text-neon-green hover:bg-neon-green/20'}`} title="Low Latency"><Zap className="w-3 h-3" /> FAST</button>
-        <button onClick={() => setMode('think')} className={`p-1 rounded flex items-center gap-1 text-[10px] font-mono transition-colors ${mode === 'think' ? 'bg-fuchsia-500 text-black shadow-[0_0_8px_#ff00ff]' : 'text-fuchsia-500 hover:bg-fuchsia-500/20'}`} title="High Thinking"><Brain className="w-3 h-3" /> THINK</button>
-        <button onClick={() => setMode('search')} className={`p-1 rounded flex items-center gap-1 text-[10px] font-mono transition-colors ${mode === 'search' ? 'bg-blue-400 text-black shadow-[0_0_8px_#60a5fa]' : 'text-blue-400 hover:bg-blue-400/20'}`} title="Search Grounding"><Search className="w-3 h-3" /> WEB</button>
-        <button onClick={() => setMode('maps')} className={`p-1 rounded flex items-center gap-1 text-[10px] font-mono transition-colors ${mode === 'maps' ? 'bg-green-400 text-black shadow-[0_0_8px_#4ade80]' : 'text-green-400 hover:bg-green-400/20'}`} title="Maps Grounding"><MapPin className="w-3 h-3" /> MAPS</button>
-        <button onClick={() => setMode('vision')} className={`p-1 rounded flex items-center gap-1 text-[10px] font-mono transition-colors ${mode === 'vision' ? 'bg-yellow-400 text-black shadow-[0_0_8px_#facc15]' : 'text-yellow-400 hover:bg-yellow-400/20'}`} title="Image Analysis"><ImageIcon className="w-3 h-3" /> VIS</button>
-        <button onClick={() => setMode('image')} className={`p-1 rounded flex items-center gap-1 text-[10px] font-mono transition-colors ${mode === 'image' ? 'bg-pink-500 text-black shadow-[0_0_8px_#ec4899]' : 'text-pink-500 hover:bg-pink-500/20'}`} title="Image Generation"><ImageIcon className="w-3 h-3" /> IMG</button>
-        <button onClick={() => setMode('video')} className={`p-1 rounded flex items-center gap-1 text-[10px] font-mono transition-colors ${mode === 'video' ? 'bg-purple-500 text-black shadow-[0_0_8px_#a855f7]' : 'text-purple-500 hover:bg-purple-500/20'}`} title="Video Generation"><Video className="w-3 h-3" /> VEO</button>
-        <button onClick={() => setMode('tts')} className={`p-1 rounded flex items-center gap-1 text-[10px] font-mono transition-colors ${mode === 'tts' ? 'bg-orange-400 text-black shadow-[0_0_8px_#fb923c]' : 'text-orange-400 hover:bg-orange-400/20'}`} title="Text to Speech"><Volume2 className="w-3 h-3" /> TTS</button>
+      <div className="flex flex-wrap gap-1.5 mb-3 items-center px-4">
+        <button onClick={() => setMode('standard')} className={`p-1.5 rounded-sm flex items-center gap-1 text-[10px] font-mono tracking-[0.16em] transition-all ${mode === 'standard' ? 'bg-cyber-blue text-black shadow-[0_0_8px_#00ffff]' : 'text-cyber-blue hover:bg-cyber-blue/18 border border-transparent hover:border-cyber-blue/20'}`} title="Standard Chat"><Terminal className="w-3 h-3" /> STD</button>
+        <button onClick={() => setMode('fast')} className={`p-1.5 rounded-sm flex items-center gap-1 text-[10px] font-mono tracking-[0.16em] transition-all ${mode === 'fast' ? 'bg-neon-green text-black shadow-[0_0_8px_#39ff14]' : 'text-neon-green hover:bg-neon-green/18 border border-transparent hover:border-neon-green/20'}`} title="Low Latency"><Zap className="w-3 h-3" /> FAST</button>
+        <button onClick={() => setMode('think')} className={`p-1.5 rounded-sm flex items-center gap-1 text-[10px] font-mono tracking-[0.16em] transition-all ${mode === 'think' ? 'bg-fuchsia-500 text-black shadow-[0_0_8px_#ff00ff]' : 'text-fuchsia-500 hover:bg-fuchsia-500/18 border border-transparent hover:border-fuchsia-500/20'}`} title="High Thinking"><Brain className="w-3 h-3" /> THINK</button>
+        <button onClick={() => setMode('search')} className={`p-1.5 rounded-sm flex items-center gap-1 text-[10px] font-mono tracking-[0.16em] transition-all ${mode === 'search' ? 'bg-blue-400 text-black shadow-[0_0_8px_#60a5fa]' : 'text-blue-400 hover:bg-blue-400/18 border border-transparent hover:border-blue-400/20'}`} title="Search Grounding"><Search className="w-3 h-3" /> WEB</button>
+        <button onClick={() => setMode('maps')} className={`p-1.5 rounded-sm flex items-center gap-1 text-[10px] font-mono tracking-[0.16em] transition-all ${mode === 'maps' ? 'bg-green-400 text-black shadow-[0_0_8px_#4ade80]' : 'text-green-400 hover:bg-green-400/18 border border-transparent hover:border-green-400/20'}`} title="Maps Grounding"><MapPin className="w-3 h-3" /> MAPS</button>
+        <button onClick={() => setMode('vision')} className={`p-1.5 rounded-sm flex items-center gap-1 text-[10px] font-mono tracking-[0.16em] transition-all ${mode === 'vision' ? 'bg-yellow-400 text-black shadow-[0_0_8px_#facc15]' : 'text-yellow-400 hover:bg-yellow-400/18 border border-transparent hover:border-yellow-400/20'}`} title="Image Analysis"><ImageIcon className="w-3 h-3" /> VIS</button>
+        <button onClick={() => setMode('image')} className={`p-1.5 rounded-sm flex items-center gap-1 text-[10px] font-mono tracking-[0.16em] transition-all ${mode === 'image' ? 'bg-pink-500 text-black shadow-[0_0_8px_#ec4899]' : 'text-pink-500 hover:bg-pink-500/18 border border-transparent hover:border-pink-500/20'}`} title="Image Generation"><ImageIcon className="w-3 h-3" /> IMG</button>
+        <button onClick={() => setMode('video')} className={`p-1.5 rounded-sm flex items-center gap-1 text-[10px] font-mono tracking-[0.16em] transition-all ${mode === 'video' ? 'bg-purple-500 text-black shadow-[0_0_8px_#a855f7]' : 'text-purple-500 hover:bg-purple-500/18 border border-transparent hover:border-purple-500/20'}`} title="Video Generation"><Video className="w-3 h-3" /> VEO</button>
+        <button onClick={() => setMode('tts')} className={`p-1.5 rounded-sm flex items-center gap-1 text-[10px] font-mono tracking-[0.16em] transition-all ${mode === 'tts' ? 'bg-orange-400 text-black shadow-[0_0_8px_#fb923c]' : 'text-orange-400 hover:bg-orange-400/18 border border-transparent hover:border-orange-400/20'}`} title="Text to Speech"><Volume2 className="w-3 h-3" /> TTS</button>
         
         {mode === 'image' && (
           <select 
@@ -677,7 +678,7 @@ export function ChatInterface() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto mb-3 px-4 space-y-3 font-mono text-sm custom-scrollbar">
+      <div className="flex-1 overflow-y-auto mb-3 px-4 space-y-3.5 font-mono text-sm custom-scrollbar">
         {messages.map((msg, idx) => (
           <div 
             key={msg.id || idx} 
@@ -686,29 +687,29 @@ export function ChatInterface() {
             <div 
               className={`max-w-[90%] p-2.5 rounded-lg border backdrop-blur-md ${
                 msg.role === 'user' 
-                  ? 'bg-white/5 border-white/10 text-gray-200 rounded-br-none' 
-                  : `bg-${activeColor}/5 border-${activeColor}/20 text-${activeColor} rounded-bl-none shadow-[0_0_15px_rgba(var(--${activeColor}-rgb),0.05)_inset]`
+                  ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] border-white/12 text-gray-100 rounded-br-none shadow-[0_10px_22px_rgba(0,0,0,0.18)]' 
+                  : `bg-${activeColor}/6 border-${activeColor}/24 text-${activeColor} rounded-bl-none shadow-[0_0_15px_rgba(var(--${activeColor}-rgb),0.05)_inset]`
               }`}
             >
               {msg.role === 'assistant' && (
-                <div className="flex items-center gap-2 mb-1 opacity-70 border-b border-current/20 pb-1">
+                <div className="flex items-center gap-2 mb-1.5 opacity-75 border-b border-current/15 pb-1.5">
                   <Cpu className="w-3 h-3" />
-                  <span className="text-[9px] tracking-widest uppercase">{PERSONA_CONFIGS[persona].name}</span>
+                  <span className="text-[9px] tracking-[0.2em] uppercase">{PERSONA_CONFIGS[persona].name}</span>
                 </div>
               )}
-              <div className="whitespace-pre-wrap leading-relaxed text-xs">{msg.content}</div>
+              <div className="whitespace-pre-wrap leading-[1.55] text-[12px] text-balance">{msg.content}</div>
               {msg.imageUrl && (
-                <img src={msg.imageUrl} alt="Attached/Generated" className="mt-2 rounded border border-white/20 max-w-full h-auto shadow-lg" />
+                <img src={msg.imageUrl} alt="Attached/Generated" className="mt-2.5 rounded border border-white/20 max-w-full h-auto shadow-lg" />
               )}
               {msg.videoUrl && (
-                <video src={msg.videoUrl} controls className="mt-2 rounded border border-white/20 max-w-full h-auto shadow-lg" />
+                <video src={msg.videoUrl} controls className="mt-2.5 rounded border border-white/20 max-w-full h-auto shadow-lg" />
               )}
             </div>
           </div>
         ))}
         {isLoading && (
           <div className="flex justify-start">
-            <div className={`bg-${activeColor}/5 border border-${activeColor}/20 text-${activeColor} p-3 rounded-lg rounded-bl-none animate-pulse flex items-center gap-2`}>
+            <div className={`bg-${activeColor}/5 border border-${activeColor}/20 text-${activeColor} px-3 py-2.5 rounded-lg rounded-bl-none animate-pulse flex items-center gap-2 shadow-[0_10px_22px_rgba(0,0,0,0.16)]`}>
               <div className={`w-1.5 h-1.5 bg-${activeColor} rounded-full animate-bounce`} />
               <div className={`w-1.5 h-1.5 bg-${activeColor} rounded-full animate-bounce`} style={{ animationDelay: '0.2s' }} />
               <div className={`w-1.5 h-1.5 bg-${activeColor} rounded-full animate-bounce`} style={{ animationDelay: '0.4s' }} />
@@ -720,7 +721,7 @@ export function ChatInterface() {
 
       <form onSubmit={handleSubmit} className="relative mt-auto flex flex-col gap-2 px-4 pb-4">
         {selectedFile && (
-          <div className="text-xs text-neon-green font-mono flex items-center gap-2 bg-black/50 p-1 rounded w-fit">
+          <div className="text-xs text-neon-green font-mono flex items-center gap-2 bg-[linear-gradient(180deg,rgba(0,0,0,0.62),rgba(7,18,10,0.68))] border border-neon-green/15 p-1.5 rounded-sm w-fit shadow-[0_8px_18px_rgba(0,0,0,0.18)]">
             <ImageIcon className="w-3 h-3" /> {selectedFile.name}
             <button type="button" onClick={() => setSelectedFile(null)} className="text-red-500 hover:text-red-400 ml-2"><X className="w-3 h-3"/></button>
           </div>
@@ -738,7 +739,7 @@ export function ChatInterface() {
             <button 
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-1.5 text-gray-500 hover:text-white transition-colors"
+              className="p-1.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-sm transition-all"
               title="Attach Image"
             >
               <ImageIcon className="w-4 h-4" />
@@ -747,7 +748,7 @@ export function ChatInterface() {
             <button 
               type="button"
               onClick={toggleListening}
-              className={`p-1.5 transition-colors ${isListening ? 'text-red-500 animate-pulse drop-shadow-[0_0_5px_#ef4444]' : 'text-gray-500 hover:text-white'}`}
+              className={`p-1.5 rounded-sm transition-all ${isListening ? 'text-red-500 animate-pulse drop-shadow-[0_0_5px_#ef4444] bg-red-500/8' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
               title="Voice Input"
             >
               <Mic className="w-4 h-4" />
@@ -759,7 +760,7 @@ export function ChatInterface() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={`Awaiting input for ${PERSONA_CONFIGS[persona].name}... (Shift+Enter to send)`}
-            className={`w-full bg-black/60 border border-white/10 rounded-lg py-2.5 pl-20 pr-12 text-white font-mono text-xs focus:outline-none focus:border-${activeColor}/50 focus:ring-1 focus:ring-${activeColor}/50 placeholder-gray-600 transition-all shadow-[0_0_10px_rgba(0,0,0,0.5)_inset] group-hover/input:border-white/20 min-h-[42px] max-h-[120px] resize-none custom-scrollbar`}
+            className={`w-full bg-[linear-gradient(180deg,rgba(0,0,0,0.62),rgba(8,10,14,0.86))] border border-white/10 rounded-lg py-3 pl-20 pr-12 text-white font-mono text-xs leading-relaxed focus:outline-none focus:border-${activeColor}/50 focus:ring-1 focus:ring-${activeColor}/50 placeholder-gray-500 transition-all shadow-[0_0_14px_rgba(0,0,0,0.52)_inset] group-hover/input:border-white/20 min-h-[42px] max-h-[120px] resize-none custom-scrollbar`}
             disabled={isLoading}
             rows={1}
           />
@@ -767,7 +768,7 @@ export function ChatInterface() {
           <button 
             type="submit"
             disabled={isLoading || (!input.trim() && !selectedFile)}
-            className={`absolute right-1.5 bottom-1.5 p-1.5 text-${activeColor} hover:text-white hover:bg-${activeColor}/20 rounded transition-colors disabled:opacity-50 disabled:hover:bg-transparent z-10`}
+            className={`absolute right-1.5 bottom-1.5 p-1.5 text-${activeColor} hover:text-white hover:bg-${activeColor}/20 rounded-sm transition-all disabled:opacity-50 disabled:hover:bg-transparent z-10 border border-transparent hover:border-${activeColor}/20`}
           >
             <Send className="w-4 h-4" />
           </button>

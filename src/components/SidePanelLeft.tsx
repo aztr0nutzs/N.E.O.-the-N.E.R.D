@@ -26,6 +26,7 @@ export function SidePanelLeft({ activeWindows, onToggle }: SidePanelLeftProps) {
     <div className="relative flex flex-col items-center py-6 px-2 h-fit">
       {/* Decorative Frame Lines */}
       <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 rounded-[24px] bg-[linear-gradient(180deg,rgba(7,10,14,0.32),rgba(7,10,14,0))]" />
         <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-cyber-blue/50" />
         <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-cyber-blue/50" />
         <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-cyber-blue/50" />
@@ -44,9 +45,9 @@ export function SidePanelLeft({ activeWindows, onToggle }: SidePanelLeftProps) {
         <div>
           <div className="flex items-center gap-2 mb-2 px-2">
             <Activity className="w-3 h-3 text-cyber-blue animate-pulse" />
-            <span className="text-[8px] font-mono text-cyber-blue tracking-widest uppercase">Neural Activity</span>
+            <span className="text-[8px] font-mono text-cyber-blue tracking-[0.22em] uppercase">Neural Activity</span>
           </div>
-          <div className="bg-black/40 border border-cyber-blue/20 rounded p-1">
+          <div className="bg-[linear-gradient(180deg,rgba(0,0,0,0.48),rgba(6,14,18,0.7))] border border-cyber-blue/20 rounded p-1 shadow-[0_10px_22px_rgba(0,0,0,0.24)]">
             <NeuralVisualizer />
           </div>
         </div>
@@ -55,9 +56,9 @@ export function SidePanelLeft({ activeWindows, onToggle }: SidePanelLeftProps) {
         <div className="mb-4">
           <div className="flex items-center gap-2 mb-2 px-2">
             <Crosshair className="w-3 h-3 text-neon-green animate-pulse" />
-            <span className="text-[8px] font-mono text-neon-green tracking-widest uppercase">Spatial Tracking</span>
+            <span className="text-[8px] font-mono text-neon-green tracking-[0.22em] uppercase">Spatial Tracking</span>
           </div>
-          <div className="bg-black/40 border border-neon-green/20 rounded p-2 flex items-center justify-center h-12 relative overflow-hidden">
+          <div className="bg-[linear-gradient(180deg,rgba(0,0,0,0.5),rgba(10,18,12,0.7))] border border-neon-green/20 rounded p-2 flex items-center justify-center h-12 relative overflow-hidden shadow-[0_10px_22px_rgba(0,0,0,0.24)]">
             <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,rgba(57,255,20,0.2)_0%,transparent_70%)]" />
             <motion.div 
               className="w-2 h-2 bg-neon-green rounded-full shadow-[0_0_10px_#39ff14]"
@@ -76,14 +77,14 @@ export function SidePanelLeft({ activeWindows, onToggle }: SidePanelLeftProps) {
         {buttons.map((btn) => (
           <motion.button
             key={btn.key}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.08, y: -1 }}
+            whileTap={{ scale: 0.96 }}
             onClick={() => onToggle(btn.key)}
             className={`
               relative w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all duration-300
               ${activeWindows[btn.key] 
-                ? `bg-black/40 border-white shadow-[0_0_15px_${btn.glow}]` 
-                : `bg-black/60 border-gray-700 hover:border-${btn.color}-500/50`
+                ? `bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.08),rgba(0,0,0,0.72))] border-white shadow-[0_0_15px_${btn.glow}]` 
+                : `bg-[linear-gradient(180deg,rgba(0,0,0,0.72),rgba(10,12,17,0.92))] border-gray-700 hover:border-${btn.color}-500/50`
               }
             `}
             style={{
@@ -91,8 +92,9 @@ export function SidePanelLeft({ activeWindows, onToggle }: SidePanelLeftProps) {
               color: activeWindows[btn.key] ? btn.glow : '#4b5563'
             }}
           >
+            <div className="absolute inset-[3px] rounded-full border border-white/6" />
             {btn.icon}
-            
+             
             {/* Active Indicator Ring */}
             {activeWindows[btn.key] && (
               <motion.div

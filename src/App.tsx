@@ -57,16 +57,26 @@ function Hotspot({ top, left, onClick, label, color = 'blue' }: { top: string, l
     <div className="absolute group cursor-pointer z-20" style={{ top, left, transform: 'translate(-50%, -50%)' }} onClick={onClick}>
       <div className="relative flex items-center justify-center">
         <motion.div 
-          className={`absolute w-10 h-10 rounded-full border-2 border-dashed ${borderClasses[color]} opacity-50`}
-          animate={{ rotate: 360, scale: [1, 1.1, 1] }}
-          transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+          className={`absolute w-10 h-10 rounded-full border-2 border-dashed ${borderClasses[color]} opacity-60`}
+          animate={{ rotate: 360, scale: [1, 1.14, 1], opacity: [0.28, 0.7, 0.28] }}
+          transition={{ duration: 4.6, repeat: Infinity, ease: "linear" }}
         />
-        <div className={`w-3 h-3 rounded-full ${colorClasses[color]} animate-pulse`} />
-        
+        <motion.div
+          className={`absolute w-6 h-6 rounded-full border ${borderClasses[color]} opacity-35`}
+          animate={{ scale: [0.9, 1.55, 1.55], opacity: [0, 0.45, 0] }}
+          transition={{ duration: 2.8, repeat: Infinity, ease: 'easeOut' }}
+        />
+        <motion.div
+          className={`w-3 h-3 rounded-full ${colorClasses[color]}`}
+          animate={{ scale: [1, 1.18, 1], opacity: [0.88, 1, 0.88] }}
+          transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <div className={`absolute w-1.5 h-1.5 rounded-full bg-white/80 ${color === 'blue' ? 'shadow-[0_0_10px_rgba(255,255,255,0.65)]' : color === 'green' ? 'shadow-[0_0_10px_rgba(255,255,255,0.6)]' : color === 'orange' ? 'shadow-[0_0_10px_rgba(255,255,255,0.58)]' : 'shadow-[0_0_10px_rgba(255,255,255,0.6)]'}`} />
+         
         {/* Label Line & Text */}
-        <div className="absolute left-full ml-6 top-1/2 -translate-y-1/2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-          <div className={`w-12 h-[1px] ${color === 'blue' ? 'bg-cyber-blue' : color === 'green' ? 'bg-neon-green' : color === 'orange' ? 'bg-bio-orange' : 'bg-fuchsia-500'}`} />
-          <span className={`ml-2 font-mono text-sm uppercase tracking-widest font-bold bg-black/50 px-2 py-1 rounded border ${borderClasses[color]} ${textClasses[color]}`}>
+        <div className="absolute left-full ml-6 top-1/2 -translate-y-1/2 flex items-center opacity-0 translate-x-[-6px] group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300 whitespace-nowrap pointer-events-none">
+          <div className={`w-14 h-[1px] ${color === 'blue' ? 'bg-cyber-blue' : color === 'green' ? 'bg-neon-green' : color === 'orange' ? 'bg-bio-orange' : 'bg-fuchsia-500'} shadow-[0_0_12px_currentColor]`} />
+          <span className={`ml-2 font-mono text-[11px] uppercase tracking-[0.22em] font-bold bg-black/65 px-2.5 py-1 rounded-sm border ${borderClasses[color]} ${textClasses[color]} shadow-[0_0_18px_rgba(0,0,0,0.45)]`}>
             {label}
           </span>
         </div>
@@ -79,10 +89,10 @@ const WindowWrapper = React.forwardRef<HTMLDivElement, { children: React.ReactNo
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, scale: 0.9, filter: 'blur(10px)' }}
-      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-      exit={{ opacity: 0, scale: 0.9, filter: 'blur(10px)' }}
-      transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+      initial={{ opacity: 0, scale: 0.94, y: 8, filter: 'blur(12px)' }}
+      animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+      exit={{ opacity: 0, scale: 0.96, y: 4, filter: 'blur(10px)' }}
+      transition={{ type: 'spring', damping: 26, stiffness: 260, mass: 0.9 }}
       className={`absolute z-30 ${position}`}
       {...props}
     >
