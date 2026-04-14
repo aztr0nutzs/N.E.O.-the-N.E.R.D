@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { Cpu, Database, Network, Power, Settings } from 'lucide-react';
 
@@ -60,7 +60,7 @@ export function SidePanelRight() {
   );
 }
 
-function StatBar({ label, value, icon, color }: { label: string, value: number, icon: React.ReactNode, color: 'blue' | 'red' | 'green' }) {
+function StatBar({ label, value, icon, color }: { label: string, value: number, icon: ReactNode, color: 'blue' | 'red' | 'green' }) {
   const barColor = color === 'red' ? 'bg-red-500' : color === 'green' ? 'bg-neon-green' : 'bg-cyber-blue';
   const glowColor = color === 'red' ? 'shadow-[0_0_8px_#ef4444]' : color === 'green' ? 'shadow-[0_0_8px_#39ff14]' : 'shadow-[0_0_8px_#00ffff]';
 

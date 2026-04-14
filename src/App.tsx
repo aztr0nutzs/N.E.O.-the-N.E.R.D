@@ -11,7 +11,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { loginWithGoogle, logout } from './firebase';
 import { NeuralProvider, useNeural } from './context/NeuralContext';
 
-const Robot3D = lazy(() => import('./components/Robot3D').then(module => ({ default: module.Robot3D })));
+const loadRobot3D = () => import('./components/Robot3D');
+const Robot3D = lazy(() => loadRobot3D().then(module => ({ default: module.Robot3D })));
 const ChatInterface = lazy(() => import('./components/ChatInterface').then(module => ({ default: module.ChatInterface })));
 const NetworkScreen = lazy(() => import('./components/NetworkScreen').then(module => ({ default: module.NetworkScreen })));
 
@@ -109,6 +110,25 @@ function AppContent() {
     radar: false,
     diagnostics: false
   });
+
+  useEffect(() => {
+    const preload = () => {
+      void loadRobot3D();
+    };
+
+    const requestIdle = (window as any).requestIdleCallback;
+    const cancelIdle = (window as any).cancelIdleCallback;
+
+    if (typeof requestIdle === 'function') {
+      const idleId = requestIdle(preload, { timeout: 1200 });
+      return () => {
+        if (typeof cancelIdle === 'function') cancelIdle(idleId);
+      };
+    }
+
+    const timeoutId = window.setTimeout(preload, 300);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   // Voice Command Parsing
   useEffect(() => {

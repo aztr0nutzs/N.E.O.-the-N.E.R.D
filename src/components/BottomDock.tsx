@@ -1,4 +1,4 @@
-import React from 'react';
+import type { ReactNode } from 'react';
 import { Wifi, Battery, Shield, Zap, Cpu, Activity, Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNeural } from '../context/NeuralContext';
@@ -6,22 +6,21 @@ import { useNeural } from '../context/NeuralContext';
 export function BottomDock({ onNetworkClick }: { onNetworkClick?: () => void }) {
   const { isSystemsReady, isListening, toggleListening, lastTranscript } = useNeural();
   interface Slot {
-    icon: React.ReactNode;
+    icon: ReactNode;
     color: string;
-    label: string;
     active?: boolean;
     low?: boolean;
     onClick?: () => void;
   }
 
   const slots: Slot[] = [
-    { icon: <Shield className="w-5 h-5" />, color: 'blue', label: 'SECURE', active: true },
-    { icon: <Zap className="w-5 h-5" />, color: 'orange', label: 'POWER', active: true },
-    { icon: <Wifi className="w-5 h-5" />, color: 'green', label: 'LINK', active: isSystemsReady, onClick: onNetworkClick },
-    { icon: <Mic className="w-5 h-5" />, color: 'red', label: 'VOICE', active: isListening, onClick: toggleListening },
-    { icon: <Cpu className="w-5 h-5" />, color: 'blue', label: 'CORE', active: true },
-    { icon: <Battery className="w-5 h-5" />, color: 'red', label: 'CELL', active: true, low: true },
-    { icon: <Activity className="w-5 h-5" />, color: 'magenta', label: 'SYNC', active: isSystemsReady },
+    { icon: <Shield className="w-5 h-5" />, color: 'blue', active: true },
+    { icon: <Zap className="w-5 h-5" />, color: 'orange', active: true },
+    { icon: <Wifi className="w-5 h-5" />, color: 'green', active: isSystemsReady, onClick: onNetworkClick },
+    { icon: <Mic className="w-5 h-5" />, color: 'red', active: isListening, onClick: toggleListening },
+    { icon: <Cpu className="w-5 h-5" />, color: 'blue', active: true },
+    { icon: <Battery className="w-5 h-5" />, color: 'red', active: true, low: true },
+    { icon: <Activity className="w-5 h-5" />, color: 'magenta', active: isSystemsReady },
   ];
 
   return (
@@ -104,13 +103,14 @@ export function BottomDock({ onNetworkClick }: { onNetworkClick?: () => void }) 
 }
 
 interface DockSlotProps {
-  icon: React.ReactNode;
+  icon: ReactNode;
   color: string;
   active?: boolean;
   low?: boolean;
+  onClick?: () => void;
 }
 
-function DockSlot({ icon, color, active, low, onClick }: any) {
+function DockSlot({ icon, color, active, low, onClick }: DockSlotProps) {
   const glowColor = color === 'green' ? 'shadow-[0_0_10px_#39ff14]' : color === 'red' ? 'shadow-[0_0_10px_#ef4444]' : color === 'orange' ? 'shadow-[0_0_10px_#f97316]' : 'shadow-[0_0_10px_#00ffff]';
   const textColor = color === 'green' ? 'text-neon-green' : color === 'red' ? 'text-red-500' : color === 'orange' ? 'text-bio-orange' : 'text-cyber-blue';
   const borderColor = color === 'green' ? 'border-neon-green/50' : color === 'red' ? 'border-red-500/50' : color === 'orange' ? 'border-bio-orange/50' : 'border-cyber-blue/50';

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Panel } from './Panel';
 import { CheckSquare, Square, AlertTriangle, Plus, Trash2 } from 'lucide-react';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useNeural } from '../context/NeuralContext';
 

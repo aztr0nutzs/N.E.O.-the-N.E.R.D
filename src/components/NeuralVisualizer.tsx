@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNeural } from '../context/NeuralContext';
 
 export function NeuralVisualizer() {

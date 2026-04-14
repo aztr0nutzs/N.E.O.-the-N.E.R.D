@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, RefreshCw, Zap, Battery, Activity, Eye, Mic, Cpu } from 'lucide-react';
+import { Shield, RefreshCw, Zap, Eye, Mic, Cpu } from 'lucide-react';
 import { useNeural } from '../context/NeuralContext';
 
 export function SystemStats() {
@@ -9,11 +9,9 @@ export function SystemStats() {
   const [reserve, setReserve] = useState(72);
   const [isRecharging, setIsRecharging] = useState(false);
   const [diagnosticMode, setDiagnosticMode] = useState(false);
-  const [uptime, setUptime] = useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setUptime(prev => prev + 1);
       if (!isRecharging) {
         setPower(prev => Math.min(100, Math.max(0, prev + (Math.random() * 2 - 1.2))));
         setReserve(prev => Math.min(100, Math.max(0, prev + (Math.random() * 1 - 0.6))));

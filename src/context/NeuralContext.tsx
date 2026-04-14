@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode, useState, useEffect } from 'react';
+import { createContext, useContext, ReactNode, useState, useEffect } from 'react';
 import { useNeuralSystems } from '../hooks/useNeuralSystems';
 import { auth } from '../firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';

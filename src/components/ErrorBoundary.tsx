@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface Props {
@@ -46,17 +46,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="bg-black/50 border border-red-500/30 p-4 rounded mb-8 w-full max-w-md overflow-hidden">
             <div className="text-[10px] text-red-400/70 mb-1 uppercase tracking-widest">Error Log</div>
             <div className="text-[10px] text-red-500 break-all font-bold">
-              {(() => {
-                try {
-                  const parsed = JSON.parse(this.state.error?.message || '{}');
-                  if (parsed.error && parsed.operationType) {
-                    return `Database Access Denied (${parsed.operationType.toUpperCase()}): ${parsed.error}`;
-                  }
-                } catch (e) {
-                  // Not JSON, just return the raw message
-                }
-                return this.state.error?.message || 'Unknown System Fault';
-              })()}
+              {this.state.error?.message || 'Unknown System Fault'}
             </div>
           </div>
           <button 
