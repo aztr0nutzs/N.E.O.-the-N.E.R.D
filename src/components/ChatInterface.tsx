@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Terminal, Image as ImageIcon, Search, MapPin, Brain, Zap, Video, Mic, Volume2, X, Cpu, Shield, Trash2 } from 'lucide-react';
 
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { db, auth, fetchProtectedJson, getClientSafeMessage, handleFirestoreError, OperationType } from '../firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, serverTimestamp, getDocs } from 'firebase/firestore';
 import { useNeural, Persona } from '../context/NeuralContext';
 
@@ -46,8 +46,46 @@ const PERSONA_CONFIGS = {
   }
 };
 
+const DEFAULT_GREETING = 'Systems online. All protocols active. How may I assist you today, sir?';
+const SIGNED_OUT_MESSAGE = 'Secure link offline. Sign in again to continue.';
+const HISTORY_SYNC_MESSAGE = 'Mission log sync unavailable. Local display may be incomplete.';
+const VIDEO_POLL_INTERVAL_MS = 5000;
+const MAX_VIDEO_POLL_ATTEMPTS = 24;
+const REMOTE_FETCH_TIMEOUT_MS = 60000;
+
+interface AiChatResponse {
+  error?: string;
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+        inlineData?: {
+          data?: string;
+        };
+      }>;
+    };
+  }>;
+}
+
+interface AiVideoStartResponse {
+  error?: string;
+  operationId?: string;
+}
+
+interface AiVideoStatusResponse {
+  error?: string;
+  done?: boolean;
+  response?: {
+    generatedVideos?: Array<{
+      video?: {
+        uri?: string;
+      };
+    }>;
+  };
+}
+
 export function ChatInterface() {
-  const { user, setNeuralSurge, isListening, toggleListening, lastTranscript, aiSettings, updateAISettings } = useNeural();
+  const { user, setNeuralSurge, isListening, toggleListening, lastTranscript, aiSettings } = useNeural();
   const [persona, setPersona] = useState<Persona>('NEO');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -59,6 +97,7 @@ export function ChatInterface() {
   
   const userId = user?.uid;
   const { setCurrentModel } = useNeural();
+  const requestVersionRef = useRef(0);
 
   useEffect(() => {
     let modelName = 'gemini-3-flash-preview';
@@ -79,7 +118,7 @@ export function ChatInterface() {
 
   useEffect(() => {
     if (!userId) {
-      setMessages([{ role: 'assistant', content: 'Systems online. All protocols active. How may I assist you today, sir?' }]);
+      setMessages([{ role: 'assistant', content: DEFAULT_GREETING }]);
       return;
     }
 
@@ -89,25 +128,47 @@ export function ChatInterface() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const loadedMessages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
       if (loadedMessages.length === 0) {
-        setMessages([{ role: 'assistant', content: 'Systems online. All protocols active. How may I assist you today, sir?' }]);
+        setMessages([{ role: 'assistant', content: DEFAULT_GREETING }]);
       } else {
         setMessages(loadedMessages);
       }
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      try {
+        handleFirestoreError(error, OperationType.LIST, path);
+      } catch (handledError) {
+        setMessages([{ role: 'assistant', content: `${HISTORY_SYNC_MESSAGE} ${getClientSafeMessage(handledError)}` }]);
+      }
     });
 
     return () => unsubscribe();
   }, [userId]);
 
   useEffect(() => {
+    if (!window.speechSynthesis) return;
+
     const loadVoices = () => {
       const availableVoices = window.speechSynthesis.getVoices();
       setVoices(availableVoices);
     };
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null;
+    };
   }, []);
+
+  useEffect(() => {
+    if (userId) return;
+
+    requestVersionRef.current += 1;
+    setIsLoading(false);
+    setSelectedFile(null);
+    setNeuralSurge(false);
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  }, [userId, setNeuralSurge]);
 
   useEffect(() => {
     if (lastTranscript && isListening) {
@@ -132,6 +193,34 @@ export function ChatInterface() {
     });
   };
 
+  const isRequestCurrent = (requestVersion: number) => requestVersion === requestVersionRef.current;
+
+  const appendLocalAssistantMessage = (content: string) => {
+    setMessages(prev => [...prev, { role: 'assistant', content }]);
+  };
+
+  const fetchBlobWithTimeout = async (url: string, timeoutMs = REMOTE_FETCH_TIMEOUT_MS) => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok) {
+        throw new Error('Generated media could not be downloaded.');
+      }
+      return await response.blob();
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('Generated media download timed out. Please try again.');
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  };
+
+  const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
   const speakText = async (text: string) => {
     const voiceName = aiSettings.personaVoices[persona] || aiSettings.defaultVoice;
     const isGeminiVoice = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede', 'Zephyr'].includes(voiceName);
@@ -139,13 +228,10 @@ export function ChatInterface() {
     if (isGeminiVoice) {
       // Use gemini-2.5-flash-preview-tts for high quality TTS via server
       try {
-        if (!auth.currentUser) throw new Error("User not authenticated");
-        const idToken = await auth.currentUser.getIdToken();
-        const response = await fetch('/api/ai/chat', {
+        const data = await fetchProtectedJson<AiChatResponse>('/api/ai/chat', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${idToken}`
           },
           body: JSON.stringify({
             model: "gemini-2.5-flash-preview-tts",
@@ -163,7 +249,6 @@ export function ChatInterface() {
           })
         });
 
-        const data = await response.json();
         const base64Audio = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
         if (base64Audio) {
           const audioData = atob(base64Audio);
@@ -189,7 +274,9 @@ export function ChatInterface() {
           return;
         }
       } catch (error) {
-        console.error("Gemini TTS failed, falling back to Web Speech:", error);
+        if (import.meta.env.DEV) {
+          console.error("Gemini TTS failed, falling back to Web Speech:", error);
+        }
       }
     }
 
@@ -222,7 +309,7 @@ export function ChatInterface() {
   };
 
   const saveMessage = async (msg: Message) => {
-    if (!userId) return;
+    if (!userId) return false;
     const newId = Date.now().toString() + Math.random().toString(36).substring(7);
     const path = `users/${userId}/messages/${newId}`;
     try {
@@ -230,13 +317,26 @@ export function ChatInterface() {
         ...msg,
         createdAt: serverTimestamp()
       });
+      return true;
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
+      try {
+        handleFirestoreError(error, OperationType.CREATE, path);
+      } catch (handledError) {
+        if (import.meta.env.DEV) {
+          console.error('Message persistence failed:', handledError);
+        }
+      }
+      return false;
     }
   };
 
   const clearHistory = async () => {
-    if (!userId) return;
+    if (!userId) {
+      appendLocalAssistantMessage(SIGNED_OUT_MESSAGE);
+      return;
+    }
+
+    const previousMessages = [...messages];
     
     // Optimistically clear local state
     setMessages([{ role: 'assistant', content: 'Memory wiped. Systems rebooted.' }]);
@@ -261,49 +361,57 @@ export function ChatInterface() {
         createdAt: serverTimestamp()
       });
     } catch (error) {
-      console.error("Error clearing history:", error);
+      setMessages([...previousMessages, {
+        role: 'assistant',
+        content: getClientSafeMessage(error, 'Memory wipe failed. Please try again.')
+      }]);
     }
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if ((!input.trim() && !selectedFile) || isLoading) return;
-
-    const userMessage = input.trim();
-    let fileDataUrl = '';
-    
-    if (selectedFile) {
-      fileDataUrl = await fileToBase64(selectedFile);
+    if (!userId || !auth.currentUser) {
+      appendLocalAssistantMessage(SIGNED_OUT_MESSAGE);
+      return;
     }
 
+    const requestVersion = requestVersionRef.current + 1;
+    requestVersionRef.current = requestVersion;
+
+    const userMessage = input.trim();
     setInput('');
     setSelectedFile(null);
-    
-    const newUserMsg: Message = { role: 'user', content: userMessage, imageUrl: fileDataUrl };
-    // Optimistic update
-    setMessages(prev => [...prev, newUserMsg]);
     setIsLoading(true);
-
-    // Save user message to Firestore
-    await saveMessage(newUserMsg);
     setNeuralSurge(true);
 
     try {
+      let fileDataUrl = '';
+      if (selectedFile) {
+        try {
+          fileDataUrl = await fileToBase64(selectedFile);
+        } catch {
+          throw new Error('Attached media could not be processed. Please try a different file.');
+        }
+      }
+
+      if (!isRequestCurrent(requestVersion)) return;
+
+      const newUserMsg: Message = { role: 'user', content: userMessage, imageUrl: fileDataUrl };
+      setMessages(prev => [...prev, newUserMsg]);
+      await saveMessage(newUserMsg);
+
       let responseText = '';
       let generatedImageUrl = '';
       let generatedVideoUrl = '';
 
       const systemInstruction = `${PERSONA_CONFIGS[persona].instruction}\n\n${aiSettings.customInstructions}`.trim();
 
-      if (!auth.currentUser) throw new Error("User not authenticated");
-      const idToken = await auth.currentUser.getIdToken();
-
       if (mode === 'image') {
-        const response = await fetch('/api/ai/image', {
+        const data = await fetchProtectedJson<AiChatResponse>('/api/ai/image', {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${idToken}`
           },
           body: JSON.stringify({
             prompt: userMessage,
@@ -315,22 +423,22 @@ export function ChatInterface() {
             }
           })
         });
-        
-        const data = await response.json();
-        if (data.error) throw new Error(data.error);
 
-        for (const part of data.candidates[0].content.parts) {
+        for (const part of data.candidates?.[0]?.content?.parts || []) {
           if (part.inlineData) {
             generatedImageUrl = `data:image/png;base64,${part.inlineData.data}`;
             responseText = "Image generated successfully, sir.";
           }
         }
+
+        if (!generatedImageUrl) {
+          throw new Error('Image generation completed without an image payload.');
+        }
       } else if (mode === 'video') {
-        const response = await fetch('/api/ai/video', {
+        const data = await fetchProtectedJson<AiVideoStartResponse>('/api/ai/video', {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${idToken}`
           },
           body: JSON.stringify({
             prompt: userMessage,
@@ -346,32 +454,38 @@ export function ChatInterface() {
           })
         });
 
-        const { operationId } = await response.json();
+        const { operationId } = data;
         if (!operationId) throw new Error("Failed to start video generation");
 
-        let done = false;
-        while (!done) {
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          const statusRes = await fetch(`/api/ai/video-status/${operationId}`, {
-            headers: { 'Authorization': `Bearer ${idToken}` }
-          });
-          const operation = await statusRes.json();
-          if (operation.done) {
-            done = true;
-            const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-            if (downloadLink) {
-              // Note: The download link might still need the key if it's a direct GCS link, 
-              // but we can proxy the download too if needed. For now, we'll try to fetch it.
-              const videoResponse = await fetch(downloadLink);
-              const videoBlob = await videoResponse.blob();
-              generatedVideoUrl = URL.createObjectURL(videoBlob);
-              responseText = "Video generation complete, sir.";
+        for (let attempt = 0; attempt < MAX_VIDEO_POLL_ATTEMPTS; attempt++) {
+          await pause(VIDEO_POLL_INTERVAL_MS);
+          if (!isRequestCurrent(requestVersion)) return;
+
+          const operation = await fetchProtectedJson<AiVideoStatusResponse>(`/api/ai/video-status/${operationId}`, {
+            headers: {
+              'Content-Type': 'application/json'
             }
+          });
+
+          if (operation.done) {
+            const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+            if (!downloadLink) {
+              throw new Error('Video generation completed without a downloadable asset.');
+            }
+
+            const videoBlob = await fetchBlobWithTimeout(downloadLink);
+            generatedVideoUrl = URL.createObjectURL(videoBlob);
+            responseText = "Video generation complete, sir.";
+            break;
           }
+        }
+
+        if (!generatedVideoUrl) {
+          throw new Error('Video generation timed out. Please try again.');
         }
       } else {
         let modelName = 'gemini-3-flash-preview';
-        let config: any = { 
+        let config: any = {
           systemInstruction,
           temperature: aiSettings.temperature,
           topP: aiSettings.topP,
@@ -401,7 +515,7 @@ export function ChatInterface() {
               mimeType
             }
           });
-          
+
           if (mimeType.startsWith('video/')) {
             modelName = 'gemini-3.1-pro-preview';
           }
@@ -412,11 +526,10 @@ export function ChatInterface() {
           parts: [{ text: m.content }]
         }));
 
-        const response = await fetch('/api/ai/chat', {
+        const data = await fetchProtectedJson<AiChatResponse>('/api/ai/chat', {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${idToken}`
           },
           body: JSON.stringify({
             model: modelName,
@@ -425,32 +538,38 @@ export function ChatInterface() {
           })
         });
 
-        const data = await response.json();
-        if (data.error) throw new Error(data.error);
-
         responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
       }
 
-      const newAssistantMsg: Message = { 
-        role: 'assistant', 
+      if (!isRequestCurrent(requestVersion)) return;
+
+      const newAssistantMsg: Message = {
+        role: 'assistant',
         content: responseText,
         imageUrl: generatedImageUrl,
         videoUrl: generatedVideoUrl
       };
 
-      // Save assistant message to Firestore
       await saveMessage(newAssistantMsg);
 
       if (mode === 'tts') {
         speakText(responseText);
       }
-
     } catch (error) {
-      console.error("Error calling Gemini:", error);
-      const errorMsg: Message = { role: 'assistant', content: 'Error: Connection to main servers disrupted. ' + (error as Error).message };
+      if (!isRequestCurrent(requestVersion)) return;
+
+      if (import.meta.env.DEV) {
+        console.error("Protected AI action failed:", error);
+      }
+
+      const errorMsg: Message = {
+        role: 'assistant',
+        content: getClientSafeMessage(error, 'Connection to main servers disrupted. Please try again.')
+      };
       setMessages(prev => [...prev, errorMsg]);
       await saveMessage(errorMsg);
     } finally {
+      if (!isRequestCurrent(requestVersion)) return;
       setIsLoading(false);
       setNeuralSurge(false);
     }
