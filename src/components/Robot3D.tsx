@@ -1,5 +1,5 @@
-// ON HOLD - NOT ACTIVE IN neo_no3d build
-// This branch is 2D robot only
+// Parked module for the inactive 3D robot path.
+// The live branch uses Robot2D in the center frame.
 // Do not re-enable Robot3D
 // Do not touch the center layout framing while polishing.
 
@@ -30,7 +30,7 @@ class ThreeErrorBoundary extends React.Component<{ children: React.ReactNode }, 
         <Html center>
           <div className="flex flex-col items-center gap-2 bg-red-500/20 p-4 rounded border border-red-500/40 backdrop-blur-md text-red-500 font-mono text-[10px] uppercase tracking-widest">
             <AlertTriangle className="w-6 h-6 mb-1" />
-            3D Engine Failure
+            Robot3D Parked
           </div>
         </Html>
       );

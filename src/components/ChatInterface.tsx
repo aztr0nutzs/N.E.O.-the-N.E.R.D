@@ -15,7 +15,7 @@ interface Message {
   createdAt?: any;
 }
 
-type ChatMode = 'standard' | 'search' | 'maps' | 'think' | 'fast' | 'vision' | 'image' | 'video' | 'tts' | 'live';
+type ChatMode = 'standard' | 'search' | 'maps' | 'think' | 'fast' | 'vision' | 'image' | 'video' | 'tts';
 type ImageSize = '512px' | '1K' | '2K' | '4K';
 type VideoAspectRatio = '16:9' | '9:16';
 

@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithRedirect, signOut } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
@@ -66,8 +66,9 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
-  // Keep detailed logging for dev
-  console.error('Detailed Firestore Error: ', JSON.stringify(errInfo, null, 2));
+  if (import.meta.env.DEV) {
+    console.error('Detailed Firestore Error: ', JSON.stringify(errInfo, null, 2));
+  }
   
   // Surface cleaner app-facing errors
   const baseMessage = error instanceof Error ? error.message : String(error);

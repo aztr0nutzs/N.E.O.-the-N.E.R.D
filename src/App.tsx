@@ -347,7 +347,7 @@ function AppContent() {
             <Robot2D />
           </Suspense>
           
-          {/* Hotspots - Overlay on top of 3D scene */}
+          {/* Hotspots - Overlay on top of the live robot frame */}
           <div className="absolute inset-0 pointer-events-none">
             <div className="pointer-events-auto absolute inset-0">
               {/* Optics: Head/Eyes area */}
