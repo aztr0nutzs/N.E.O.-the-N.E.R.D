@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
-import { useNeural } from '../context/NeuralContext';
+import { useNeuralRealtime, useNeuralUi } from '../context/NeuralContext';
 
-export function Robot2D() {
-  const { userPosition, audioData, neuralSurge } = useNeural();
+export const Robot2D = React.memo(function Robot2D() {
+  const { userPosition, audioData } = useNeuralRealtime();
+  const { neuralSurge } = useNeuralUi();
 
   // Calculate audio intensity for reactive elements
   const { audioIntensity, audioAverage } = useMemo(() => {
@@ -111,4 +112,4 @@ export function Robot2D() {
       </div>
     </div>
   );
-}
+});

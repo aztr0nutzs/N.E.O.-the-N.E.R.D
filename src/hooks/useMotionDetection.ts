@@ -7,6 +7,7 @@ const devLog = (...args: unknown[]) => {
 export function useMotionDetection() {
   const [userPosition, setUserPosition] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const prevFrameRef = useRef<Uint8ClampedArray | null>(null);
   const lastLogRef = useRef(0);
 
@@ -15,17 +16,15 @@ export function useMotionDetection() {
     canvas.width = 80; 
     canvas.height = 60;
     canvasRef.current = canvas;
+    contextRef.current = canvas.getContext('2d', { willReadFrequently: true });
     return canvas;
   }, []);
 
   const processMotion = useCallback((video: HTMLVideoElement) => {
-    if (!canvasRef.current || video.readyState < 2) return;
+    if (!canvasRef.current || !contextRef.current || video.readyState < 2) return;
 
-    const ctx = canvasRef.current.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return;
-
-    ctx.drawImage(video, 0, 0, canvasRef.current.width, canvasRef.current.height);
-    const imageData = ctx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
+    contextRef.current.drawImage(video, 0, 0, canvasRef.current.width, canvasRef.current.height);
+    const imageData = contextRef.current.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
     const data = imageData.data;
 
     if (prevFrameRef.current) {
@@ -56,10 +55,16 @@ export function useMotionDetection() {
         const targetX = (0.5 - centerX) * 2; 
         const targetY = (centerY - 0.5) * 2;
 
-        setUserPosition(prev => ({
-          x: prev.x + (targetX - prev.x) * 0.12, // Slightly faster lerp
-          y: prev.y + (targetY - prev.y) * 0.12
-        }));
+        setUserPosition(prev => {
+          const nextPosition = {
+            x: prev.x + (targetX - prev.x) * 0.12,
+            y: prev.y + (targetY - prev.y) * 0.12
+          };
+          if (Math.abs(nextPosition.x - prev.x) < 0.01 && Math.abs(nextPosition.y - prev.y) < 0.01) {
+            return prev;
+          }
+          return nextPosition;
+        });
 
         if (Date.now() - lastLogRef.current > 2000) {
           devLog(`Motion detected: count=${count}, pos=(${targetX.toFixed(2)}, ${targetY.toFixed(2)})`);
@@ -67,10 +72,16 @@ export function useMotionDetection() {
         }
       } else {
         // Return to center
-        setUserPosition(prev => ({
-          x: prev.x * 0.96,
-          y: prev.y * 0.96
-        }));
+        setUserPosition(prev => {
+          const nextPosition = {
+            x: prev.x * 0.96,
+            y: prev.y * 0.96
+          };
+          if (Math.abs(nextPosition.x - prev.x) < 0.01 && Math.abs(nextPosition.y - prev.y) < 0.01) {
+            return prev;
+          }
+          return nextPosition;
+        });
       }
     }
     

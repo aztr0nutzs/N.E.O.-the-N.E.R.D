@@ -1,20 +1,20 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { SystemStats } from './components/SystemStats';
-import { TaskLog } from './components/TaskLog';
 import { Panel } from './components/Panel';
 import { SidePanelLeft } from './components/SidePanelLeft';
 import { SidePanelRight } from './components/SidePanelRight';
 import { BottomDock } from './components/BottomDock';
 import { NerdLogo } from './components/NerdLogo';
-import { SettingsPanel } from './components/SettingsPanel';
 import { Power, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { loginWithGoogle, logout } from './firebase';
-import { NeuralProvider, useNeural } from './context/NeuralContext';
+import { NeuralProvider, useNeuralAuth, useNeuralRealtime, useNeuralSystem } from './context/NeuralContext';
 
 const Robot2D = lazy(() => import('./components/Robot2D').then(module => ({ default: module.Robot2D })));
 const ChatInterface = lazy(() => import('./components/ChatInterface').then(module => ({ default: module.ChatInterface })));
 const NetworkScreen = lazy(() => import('./components/NetworkScreen').then(module => ({ default: module.NetworkScreen })));
+const TaskLog = lazy(() => import('./components/TaskLog').then(module => ({ default: module.TaskLog })));
+const SettingsPanel = lazy(() => import('./components/SettingsPanel').then(module => ({ default: module.SettingsPanel })));
 
 function DiagnosticItem({ label, status, details }: { label: string, status: 'online' | 'offline' | 'warning', details: string }) {
   return (
@@ -102,6 +102,32 @@ const WindowWrapper = React.forwardRef<HTMLDivElement, { children: React.ReactNo
 });
 WindowWrapper.displayName = 'WindowWrapper';
 
+function NeuralAura() {
+  const { audioData } = useNeuralRealtime();
+
+  return (
+    <motion.div 
+      className="absolute inset-0 pointer-events-none z-0"
+      animate={{ 
+        boxShadow: [
+          `inset 0 0 ${20 + (audioData[0] || 0) / 2}px rgba(0,255,255,0.05)`,
+          `inset 0 0 ${50 + (audioData[0] || 0)}px rgba(0,255,255,0.1)`,
+          `inset 0 0 ${20 + (audioData[0] || 0) / 2}px rgba(0,255,255,0.05)`
+        ]
+      }}
+      transition={{ duration: 0.1, ease: "linear" }}
+    />
+  );
+}
+
+function PanelLoadingFallback() {
+  return (
+    <div className="w-full h-full flex items-center justify-center">
+      <div className="w-7 h-7 border-2 border-cyber-blue/60 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <NeuralProvider>
@@ -111,7 +137,8 @@ export default function App() {
 }
 
 function AppContent() {
-  const { isSystemsReady, startSystems, userPosition, audioData, lastTranscript, user, authLoading } = useNeural();
+  const { isSystemsReady, startSystems, lastTranscript } = useNeuralSystem();
+  const { user, authLoading } = useNeuralAuth();
   const [showNetworkScreen, setShowNetworkScreen] = useState(false);
   const [activeWindows, setActiveWindows] = useState({
     tasks: false,
@@ -265,17 +292,7 @@ function AppContent() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,255,255,0.05)_0%,transparent_70%)] pointer-events-none" />
         
         {/* Neural Aura Pulse */}
-        <motion.div 
-          className="absolute inset-0 pointer-events-none z-0"
-          animate={{ 
-            boxShadow: [
-              `inset 0 0 ${20 + (audioData[0] || 0) / 2}px rgba(0,255,255,0.05)`,
-              `inset 0 0 ${50 + (audioData[0] || 0)}px rgba(0,255,255,0.1)`,
-              `inset 0 0 ${20 + (audioData[0] || 0) / 2}px rgba(0,255,255,0.05)`
-            ]
-          }}
-          transition={{ duration: 0.1, ease: "linear" }}
-        />
+        <NeuralAura />
         {/* Neural Link Overlay (if not ready) */}
         {!isSystemsReady && (
           <div className="absolute inset-0 z-[100] bg-[#050505] flex flex-col items-center justify-center text-center overflow-hidden">
@@ -387,7 +404,9 @@ function AppContent() {
           {activeWindows.tasks && (
             <WindowWrapper key="tasks" position="top-1/4 left-1/2 -translate-x-1/2 w-[90%] h-[50%] z-50">
               <Panel title="Mission Logs" accentColor="orange" onClose={() => toggleWindow('tasks')} className="h-full">
-                <TaskLog />
+                <Suspense fallback={<PanelLoadingFallback />}>
+                  <TaskLog />
+                </Suspense>
               </Panel>
             </WindowWrapper>
           )}
@@ -505,7 +524,9 @@ function AppContent() {
           {activeWindows.settings && (
             <WindowWrapper key="settings" position="top-[10%] left-1/2 -translate-x-1/2 w-[90%] h-[80%] z-50">
               <Panel title="AI Configuration" accentColor="blue" onClose={() => toggleWindow('settings')} className="h-full">
-                <SettingsPanel onClose={() => toggleWindow('settings')} />
+                <Suspense fallback={<PanelLoadingFallback />}>
+                  <SettingsPanel onClose={() => toggleWindow('settings')} />
+                </Suspense>
               </Panel>
             </WindowWrapper>
           )}

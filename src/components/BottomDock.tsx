@@ -1,10 +1,10 @@
 import React from 'react';
 import { Wifi, Battery, Shield, Zap, Cpu, Activity, Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useNeural } from '../context/NeuralContext';
+import { useNeuralSystem } from '../context/NeuralContext';
 
 export function BottomDock({ onNetworkClick }: { onNetworkClick?: () => void }) {
-  const { isSystemsReady, isListening, toggleListening, lastTranscript } = useNeural();
+  const { isSystemsReady, isListening, toggleListening, lastTranscript } = useNeuralSystem();
   interface Slot {
     icon: React.ReactNode;
     color: string;

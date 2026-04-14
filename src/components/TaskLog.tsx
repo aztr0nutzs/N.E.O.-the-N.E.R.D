@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Panel } from './Panel';
 import { CheckSquare, Square, AlertTriangle, Plus, Trash2 } from 'lucide-react';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { handleFirestoreError, OperationType } from '../firebase';
+import { db } from '../firestore';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
-import { useNeural } from '../context/NeuralContext';
+import { useNeuralAuth } from '../context/NeuralContext';
 
 interface Task {
   id: string;
@@ -15,7 +16,7 @@ interface Task {
 }
 
 export function TaskLog() {
-  const { user } = useNeural();
+  const { user } = useNeuralAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [error, setError] = useState('');

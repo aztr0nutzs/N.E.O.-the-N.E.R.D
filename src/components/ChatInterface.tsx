@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Terminal, Image as ImageIcon, Search, MapPin, Brain, Zap, Video, Mic, Volume2, X, Cpu, Shield, Trash2 } from 'lucide-react';
 
-import { db, auth, fetchProtectedJson, getClientSafeMessage, handleFirestoreError, OperationType } from '../firebase';
+import { auth, fetchProtectedJson, getClientSafeMessage, handleFirestoreError, OperationType } from '../firebase';
+import { db } from '../firestore';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, serverTimestamp, getDocs } from 'firebase/firestore';
-import { useNeural, Persona } from '../context/NeuralContext';
+import { Persona, useNeuralAuth, useNeuralSystem, useNeuralUi } from '../context/NeuralContext';
 
 interface Message {
   id?: string;
@@ -85,7 +86,9 @@ interface AiVideoStatusResponse {
 }
 
 export function ChatInterface() {
-  const { user, setNeuralSurge, isListening, toggleListening, lastTranscript, aiSettings } = useNeural();
+  const { user } = useNeuralAuth();
+  const { isListening, toggleListening, lastTranscript } = useNeuralSystem();
+  const { setNeuralSurge, aiSettings, setCurrentModel } = useNeuralUi();
   const [persona, setPersona] = useState<Persona>('NEO');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -96,7 +99,6 @@ export function ChatInterface() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
   const userId = user?.uid;
-  const { setCurrentModel } = useNeural();
   const requestVersionRef = useRef(0);
 
   useEffect(() => {

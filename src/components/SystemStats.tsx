@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, RefreshCw, Zap, Battery, Activity, Eye, Mic, Cpu } from 'lucide-react';
-import { useNeural } from '../context/NeuralContext';
+import { useNeuralSystem } from '../context/NeuralContext';
 
 export function SystemStats() {
-  const { isSystemsReady, isListening } = useNeural();
+  const { isSystemsReady, isListening } = useNeuralSystem();
   const [power, setPower] = useState(68);
   const [reserve, setReserve] = useState(72);
   const [isRecharging, setIsRecharging] = useState(false);

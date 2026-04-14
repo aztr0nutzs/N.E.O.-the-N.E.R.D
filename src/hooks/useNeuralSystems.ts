@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSpeechRecognition } from './useSpeechRecognition';
 import { useMediaStream } from './useMediaStream';
 import { useMotionDetection } from './useMotionDetection';
@@ -15,12 +15,49 @@ export function useNeuralSystems() {
   const [audioData, setAudioData] = useState<Uint8Array>(new Uint8Array(0));
   const [isSystemsReady, setIsSystemsReady] = useState(false);
   const animationFrameRef = useRef<number | null>(null);
+  const audioBufferRef = useRef<Uint8Array | null>(null);
+  const lastAudioSampleRef = useRef(0);
+  const lastMotionSampleRef = useRef(0);
 
   const { isListening, lastTranscript, initSpeechRecognition, toggleListening, cleanupSpeechRecognition } = useSpeechRecognition();
   const { initMediaStream, cleanupMediaStream, analyzerRef, videoRef, audioContextRef } = useMediaStream();
   const { userPosition, initMotionDetection, processMotion } = useMotionDetection();
 
-  const startSystems = async () => {
+  const update = useCallback((timestamp: number) => {
+    if (analyzerRef.current && audioContextRef.current?.state === 'running' && timestamp - lastAudioSampleRef.current >= 80) {
+      const analyzer = analyzerRef.current;
+      let dataArray = audioBufferRef.current;
+      if (!dataArray || dataArray.length !== analyzer.frequencyBinCount) {
+        dataArray = new Uint8Array(analyzer.frequencyBinCount);
+        audioBufferRef.current = dataArray;
+      }
+
+      analyzer.getByteFrequencyData(dataArray);
+      lastAudioSampleRef.current = timestamp;
+
+      setAudioData(prev => {
+        if (prev.length === dataArray.length) {
+          let delta = 0;
+          for (let i = 0; i < dataArray.length; i += 4) {
+            delta += Math.abs(prev[i] - dataArray[i]);
+          }
+          if (delta < 24) {
+            return prev;
+          }
+        }
+        return new Uint8Array(dataArray);
+      });
+    }
+
+    if (videoRef.current && timestamp - lastMotionSampleRef.current >= 66) {
+      processMotion(videoRef.current);
+      lastMotionSampleRef.current = timestamp;
+    }
+
+    animationFrameRef.current = requestAnimationFrame(update);
+  }, [analyzerRef, audioContextRef, processMotion, videoRef]);
+
+  const startSystems = useCallback(async () => {
     devLog("Initializing Neural Systems...");
     try {
       initSpeechRecognition();
@@ -35,23 +72,7 @@ export function useNeuralSystems() {
       devError("Failed to initialize neural systems:", err);
       setIsSystemsReady(false);
     }
-  };
-
-  const update = () => {
-    // Update Audio
-    if (analyzerRef.current && audioContextRef.current?.state === 'running') {
-      const dataArray = new Uint8Array(analyzerRef.current.frequencyBinCount);
-      analyzerRef.current.getByteFrequencyData(dataArray);
-      setAudioData(dataArray);
-    }
-
-    // Update Vision (Motion tracking)
-    if (videoRef.current) {
-      processMotion(videoRef.current);
-    }
-
-    animationFrameRef.current = requestAnimationFrame(update);
-  };
+  }, [initSpeechRecognition, initMediaStream, initMotionDetection, update]);
 
   useEffect(() => {
     return () => {

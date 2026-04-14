@@ -1,7 +1,7 @@
 import { Settings, AlertTriangle, Terminal, Crosshair, Activity } from 'lucide-react';
 import { motion } from 'motion/react';
 import { NeuralVisualizer } from './NeuralVisualizer';
-import { useNeural } from '../context/NeuralContext';
+import { useNeuralRealtime } from '../context/NeuralContext';
 
 interface SidePanelLeftProps {
   activeWindows: {
@@ -14,7 +14,7 @@ interface SidePanelLeftProps {
 }
 
 export function SidePanelLeft({ activeWindows, onToggle }: SidePanelLeftProps) {
-  const { userPosition } = useNeural();
+  const { userPosition } = useNeuralRealtime();
   const buttons = [
     { key: 'sensors', icon: <Settings className="w-5 h-5" />, color: 'blue', glow: '#00ffff' },
     { key: 'tasks', icon: <AlertTriangle className="w-5 h-5" />, color: 'orange', glow: '#f97316' },

@@ -1,12 +1,13 @@
-import React from 'react';
-import { useNeural } from '../context/NeuralContext';
+import React, { useMemo } from 'react';
+import { useNeuralRealtime } from '../context/NeuralContext';
 
-export function NeuralVisualizer() {
-  const { audioData } = useNeural();
+export const NeuralVisualizer = React.memo(function NeuralVisualizer() {
+  const { audioData } = useNeuralRealtime();
+  const bars = useMemo(() => Array.from(audioData.slice(0, 32)), [audioData]);
 
   return (
     <div className="w-full h-12 flex items-end justify-between gap-[1px] px-2">
-      {Array.from(audioData).slice(0, 32).map((value: number, i) => (
+      {bars.map((value, i) => (
         <div 
           key={i}
           className="w-full bg-cyber-blue shadow-[0_0_5px_rgba(0,255,255,0.5)]"
@@ -19,4 +20,4 @@ export function NeuralVisualizer() {
       ))}
     </div>
   );
-}
+});

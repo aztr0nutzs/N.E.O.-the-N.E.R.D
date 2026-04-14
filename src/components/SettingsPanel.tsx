@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNeural, Persona } from '../context/NeuralContext';
+import { Persona, useNeuralUi } from '../context/NeuralContext';
 import { Panel } from './Panel';
 import { Save, RefreshCw, Volume2 } from 'lucide-react';
 
@@ -13,7 +13,7 @@ const GEMINI_VOICES = [
 ];
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
-  const { aiSettings, updateAISettings, setNeuralSurge } = useNeural();
+  const { aiSettings, updateAISettings, setNeuralSurge } = useNeuralUi();
   const [localSettings, setLocalSettings] = useState(aiSettings);
   const [webVoices, setWebVoices] = useState<SpeechSynthesisVoice[]>([]);
 
