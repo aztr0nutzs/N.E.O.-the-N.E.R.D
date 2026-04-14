@@ -213,7 +213,7 @@ function AppContent() {
   if (authLoading) {
     return (
       <div className="min-h-screen w-full bg-[#050505] flex items-center justify-center font-sans overflow-hidden">
-        <div className="text-cyber-blue font-mono animate-pulse">BOOTING SYSTEM...</div>
+        <div className="text-cyber-blue font-mono animate-pulse">BOOTING CORE SYSTEMS...</div>
       </div>
     );
   }
@@ -245,6 +245,7 @@ function AppContent() {
 
           <button 
             onClick={loginWithGoogle}
+            aria-label="Initialize uplink with Google sign-in"
             className="w-full py-4 bg-cyber-blue/10 border border-cyber-blue text-cyber-blue font-mono font-bold tracking-widest rounded hover:bg-cyber-blue hover:text-black transition-all shadow-[0_0_15px_rgba(0,255,255,0.3)] mb-4"
           >
             INITIALIZE UPLINK
@@ -254,9 +255,10 @@ function AppContent() {
             <button 
               onClick={handleStartSystems}
               disabled={isConnecting}
+              aria-label="Establish neural link"
               className="w-full py-4 bg-neon-green/10 border border-neon-green text-neon-green font-mono font-bold tracking-widest rounded hover:bg-neon-green hover:text-black transition-all shadow-[0_0_15px_rgba(57,255,20,0.3)] disabled:opacity-50"
             >
-              {isConnecting ? 'ESTABLISHING...' : 'ESTABLISH NEURAL LINK'}
+              {isConnecting ? 'ESTABLISHING LINK...' : 'ESTABLISH NEURAL LINK'}
             </button>
           )}
         </div>
@@ -309,6 +311,7 @@ function AppContent() {
                 </p>
                 <button 
                   onClick={handleStartSystems}
+                  aria-label="Establish neural link"
                   className="px-10 py-4 bg-cyber-blue/10 border border-cyber-blue text-cyber-blue font-mono font-bold tracking-widest rounded hover:bg-cyber-blue hover:text-black transition-all shadow-[0_0_20px_rgba(0,255,255,0.4)] relative overflow-hidden group"
                 >
                   <div className="absolute inset-0 bg-cyber-blue/20 translate-y-full group-hover:translate-y-0 transition-transform" />
@@ -335,6 +338,7 @@ function AppContent() {
              )}
              <button 
                onClick={logout}
+               aria-label="Disconnect and sign out"
                className="text-red-500 hover:text-red-400 hover:bg-red-500/10 p-1.5 rounded transition-colors border border-transparent hover:border-red-500/30"
                title="Disconnect"
              >
@@ -348,6 +352,7 @@ function AppContent() {
            <SidePanelLeft activeWindows={activeWindows} onToggle={toggleWindow} />
            <button 
              onClick={() => toggleWindow('diagnostics')}
+             aria-label="Toggle system diagnostics"
              className={`mt-4 w-10 h-10 rounded-full flex items-center justify-center border transition-all ${activeWindows.diagnostics ? 'bg-cyber-blue text-black border-cyber-blue' : 'bg-black/40 text-cyber-blue border-cyber-blue/30 hover:bg-cyber-blue/20'}`}
            >
              <Shield className="w-5 h-5" />
@@ -406,11 +411,11 @@ function AppContent() {
                 <div className="grid grid-cols-2 gap-4 font-mono text-sm">
                   <div className="bg-black/50 p-3 rounded border border-bio-orange/30 shadow-[0_0_10px_rgba(255,140,0,0.1)_inset]">
                     <div className="text-gray-500 text-[10px] mb-1">INT TEMP</div>
-                    <div className="text-bio-orange font-bold text-lg">24Â°C</div>
+                    <div className="text-bio-orange font-bold text-lg">24°C</div>
                   </div>
                   <div className="bg-black/50 p-3 rounded border border-cyber-blue/30 shadow-[0_0_10px_rgba(0,255,255,0.1)_inset]">
                     <div className="text-gray-500 text-[10px] mb-1">EXT TEMP</div>
-                    <div className="text-cyber-blue font-bold text-lg">-45Â°C</div>
+                    <div className="text-cyber-blue font-bold text-lg">-45°C</div>
                   </div>
                   <div className="bg-black/50 p-3 rounded border border-neon-green/30 shadow-[0_0_10px_rgba(57,255,20,0.1)_inset]">
                     <div className="text-gray-500 text-[10px] mb-1">PRESSURE</div>
@@ -418,7 +423,7 @@ function AppContent() {
                   </div>
                   <div className="bg-black/50 p-3 rounded border border-fuchsia-500/30 shadow-[0_0_10px_rgba(255,0,255,0.1)_inset]">
                     <div className="text-gray-500 text-[10px] mb-1">RADIATION</div>
-                    <div className="text-fuchsia-500 font-bold text-lg">0.02 ÂµSv</div>
+                    <div className="text-fuchsia-500 font-bold text-lg">0.02 µSv</div>
                   </div>
                 </div>
               </Panel>
@@ -500,6 +505,7 @@ function AppContent() {
                     </div>
                     <button 
                       onClick={() => window.location.reload()}
+                      aria-label="Force reboot system interface"
                       className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-mono font-bold rounded hover:bg-red-500 hover:text-white transition-all"
                     >
                       FORCE REBOOT

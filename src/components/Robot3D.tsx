@@ -185,7 +185,7 @@ function LoadingFallback() {
             Initializing 3D Viewport
           </span>
           <span className="max-w-[230px] text-[10px] font-mono uppercase leading-relaxed text-gray-400">
-            Loading /robot_model.glb and validating the live assistant render path.
+            Loading the live assistant model from /robot_model.glb.
           </span>
         </div>
       </div>

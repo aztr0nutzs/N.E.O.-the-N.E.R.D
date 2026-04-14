@@ -674,7 +674,7 @@ export function ChatInterface() {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={clearHistory} className="text-gray-500 hover:text-red-500 transition-colors" title="Clear History">
+          <button onClick={clearHistory} className="text-gray-500 hover:text-red-500 transition-colors" title="Clear History" aria-label="Clear conversation history">
             <Trash2 className="w-3 h-3" />
           </button>
           <div className={`text-[10px] font-mono text-${activeColor} animate-pulse flex items-center gap-1`}>
@@ -778,7 +778,7 @@ export function ChatInterface() {
         {selectedFile && (
           <div className="text-xs text-neon-green font-mono flex items-center gap-2 bg-black/50 p-1 rounded w-fit">
             <ImageIcon className="w-3 h-3" /> {selectedFile.name}
-            <button type="button" onClick={() => setSelectedFile(null)} className="text-red-500 hover:text-red-400 ml-2"><X className="w-3 h-3"/></button>
+            <button type="button" onClick={() => setSelectedFile(null)} className="text-red-500 hover:text-red-400 ml-2" aria-label="Remove selected attachment"><X className="w-3 h-3"/></button>
           </div>
         )}
         
@@ -789,13 +789,15 @@ export function ChatInterface() {
             onChange={handleFileChange}
             className="hidden"
             accept="image/*,video/*"
+            aria-label="Attach image or video"
           />
           <div className="absolute left-2 bottom-2 flex gap-1 z-10">
             <button 
               type="button"
               onClick={() => fileInputRef.current?.click()}
+              aria-label="Attach image or video"
               className="p-1.5 text-gray-500 hover:text-white transition-colors"
-              title="Attach Image"
+              title="Attach Image or Video"
             >
               <ImageIcon className="w-4 h-4" />
             </button>
@@ -803,6 +805,7 @@ export function ChatInterface() {
             <button 
               type="button"
               onClick={toggleListening}
+              aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
               className={`p-1.5 transition-colors ${isListening ? 'text-red-500 animate-pulse drop-shadow-[0_0_5px_#ef4444]' : 'text-gray-500 hover:text-white'}`}
               title="Voice Input"
             >
@@ -814,7 +817,8 @@ export function ChatInterface() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Awaiting input for ${PERSONA_CONFIGS[persona].name}... (Shift+Enter to send)`}
+            placeholder={`Awaiting input for ${PERSONA_CONFIGS[persona].name}... (Shift+Enter transmits)`}
+            aria-label={`Message input for ${PERSONA_CONFIGS[persona].name}`}
             className={`w-full bg-black/60 border border-white/10 rounded-lg py-2.5 pl-20 pr-12 text-white font-mono text-xs focus:outline-none focus:border-${activeColor}/50 focus:ring-1 focus:ring-${activeColor}/50 placeholder-gray-600 transition-all shadow-[0_0_10px_rgba(0,0,0,0.5)_inset] group-hover/input:border-white/20 min-h-[42px] max-h-[120px] resize-none custom-scrollbar`}
             disabled={isLoading}
             rows={1}
@@ -823,6 +827,8 @@ export function ChatInterface() {
           <button 
             type="submit"
             disabled={isLoading || (!input.trim() && !selectedFile)}
+            aria-label="Transmit message"
+            title="Transmit Message"
             className={`absolute right-1.5 bottom-1.5 p-1.5 text-${activeColor} hover:text-white hover:bg-${activeColor}/20 rounded transition-colors disabled:opacity-50 disabled:hover:bg-transparent z-10`}
           >
             <Send className="w-4 h-4" />
