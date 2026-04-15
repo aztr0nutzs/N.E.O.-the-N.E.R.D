@@ -22,6 +22,16 @@ allprojects {
         google()
         mavenCentral()
     }
+
+    // Fix: kotlin-stdlib 1.8+ merged jdk7/jdk8 extensions into the main artifact.
+    // Force all Kotlin stdlib variants to the same version to avoid duplicate class errors.
+    configurations.all {
+        resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+            if (details.requested.group == 'org.jetbrains.kotlin') {
+                details.useVersion '1.8.22'
+            }
+        }
+    }
 }
 
 task clean(type: Delete) {
