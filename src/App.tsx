@@ -171,7 +171,7 @@ function AppContent() {
     } else if (transcript.includes('close radar') || transcript.includes('hide optics')) {
       setActiveWindows(prev => ({ ...prev, radar: false }));
     } else if (transcript.includes('close all windows')) {
-      setActiveWindows({ tasks: false, sensors: false, terminal: false, radar: false, diagnostics: false });
+      setActiveWindows({ tasks: false, sensors: false, terminal: false, radar: false, diagnostics: false, settings: false });
     }
   }, [lastTranscript]);
 
