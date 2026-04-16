@@ -21,7 +21,7 @@ export function TaskLog() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [error, setError] = useState('');
 
-  const userId = user?.uid;
+  const userId = user?.id;
 
   useEffect(() => {
     if (!userId) {

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, ReactNode, useState, useEffect, useMemo, useCallback } from 'react';
+import { User } from '@supabase/supabase-js';
 import { useNeuralSystems } from '../hooks/useNeuralSystems';
-import { auth } from '../firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { supabase } from '../lib/supabase';
 
 export type Persona = 'NEO' | 'FRIDAY' | 'EDITH' | 'ULTRON';
 
@@ -77,11 +77,33 @@ export function NeuralProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+    let isMounted = true;
+
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!isMounted) return;
+      if (error) {
+        if (import.meta.env.DEV) {
+          console.error('Auth session bootstrap failed:', error);
+        }
+        setUser(null);
+      } else {
+        setUser(data.session?.user ?? null);
+      }
       setAuthLoading(false);
     });
-    return () => unsubscribe();
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+      setUser(session?.user ?? null);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const authValue = useMemo(() => ({

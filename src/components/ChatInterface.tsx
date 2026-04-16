@@ -98,7 +98,7 @@ export function ChatInterface() {
   const [videoAspectRatio, setVideoAspectRatio] = useState<VideoAspectRatio>('16:9');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
-  const userId = user?.uid;
+  const userId = user?.id;
   const requestVersionRef = useRef(0);
 
   useEffect(() => {
