@@ -1,9 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Terminal, Image as ImageIcon, Search, MapPin, Brain, Zap, Video, Mic, Volume2, X, Cpu, Shield, Trash2 } from 'lucide-react';
 
-import { auth, fetchProtectedJson, getClientSafeMessage, handleFirestoreError, OperationType } from '../firebase';
-import { db } from '../firestore';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, serverTimestamp, getDocs } from 'firebase/firestore';
+import { auth, fetchProtectedJson, getClientSafeMessage, handleFirestoreError, OperationType, supabase } from '../firebase';
 import { Persona, useNeuralAuth, useNeuralSystem, useNeuralUi } from '../context/NeuralContext';
 
 interface Message {
@@ -124,25 +122,37 @@ export function ChatInterface() {
       return;
     }
 
-    const path = `users/${userId}/messages`;
-    const q = query(collection(db, path), orderBy('createdAt', 'asc'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loadedMessages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
-      if (loadedMessages.length === 0) {
-        setMessages([{ role: 'assistant', content: DEFAULT_GREETING }]);
-      } else {
-        setMessages(loadedMessages);
-      }
-    }, (error) => {
+    const loadMessages = async () => {
       try {
-        handleFirestoreError(error, OperationType.LIST, path);
-      } catch (handledError) {
-        setMessages([{ role: 'assistant', content: `${HISTORY_SYNC_MESSAGE} ${getClientSafeMessage(handledError)}` }]);
-      }
-    });
+        const { data, error } = await supabase
+          .from('messages')
+          .select('id, role, content, image_url, video_url, audio_data, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: true });
 
-    return () => unsubscribe();
+        if (error) throw error;
+
+        const loadedMessages = (data ?? []).map((row) => ({
+          id: row.id,
+          role: row.role as 'user' | 'assistant',
+          content: row.content,
+          imageUrl: row.image_url ?? undefined,
+          videoUrl: row.video_url ?? undefined,
+          audioData: row.audio_data ?? undefined,
+          createdAt: row.created_at
+        } as Message));
+
+        setMessages(loadedMessages.length === 0 ? [{ role: 'assistant', content: DEFAULT_GREETING }] : loadedMessages);
+      } catch (error) {
+        try {
+          handleFirestoreError(error, OperationType.LIST, `messages:user_id=${userId}`);
+        } catch (handledError) {
+          setMessages([{ role: 'assistant', content: `${HISTORY_SYNC_MESSAGE} ${getClientSafeMessage(handledError)}` }]);
+        }
+      }
+    };
+
+    void loadMessages();
   }, [userId]);
 
   useEffect(() => {
@@ -313,12 +323,18 @@ export function ChatInterface() {
   const saveMessage = async (msg: Message) => {
     if (!userId) return false;
     const newId = Date.now().toString() + Math.random().toString(36).substring(7);
-    const path = `users/${userId}/messages/${newId}`;
+    const path = `messages/${newId}`;
     try {
-      await setDoc(doc(db, `users/${userId}/messages`, newId), {
-        ...msg,
-        createdAt: serverTimestamp()
+      const { error } = await supabase.from('messages').insert({
+        id: newId,
+        user_id: userId,
+        role: msg.role,
+        content: msg.content,
+        image_url: msg.imageUrl ?? null,
+        video_url: msg.videoUrl ?? null,
+        audio_data: msg.audioData ?? null
       });
+      if (error) throw error;
       return true;
     } catch (error) {
       try {
@@ -344,24 +360,20 @@ export function ChatInterface() {
     setMessages([{ role: 'assistant', content: 'Memory wiped. Systems rebooted.' }]);
 
     try {
-      // Delete all messages from Firestore
-      const path = `users/${userId}/messages`;
-      const q = query(collection(db, path));
-      const snapshot = await getDocs(q);
-      
-      const deletePromises = snapshot.docs.map(docSnapshot => 
-        deleteDoc(doc(db, path, docSnapshot.id))
-      );
-      
-      await Promise.all(deletePromises);
+      const { error: deleteError } = await supabase
+        .from('messages')
+        .delete()
+        .eq('user_id', userId);
+      if (deleteError) throw deleteError;
 
-      // Add the reboot message
       const newId = Date.now().toString();
-      await setDoc(doc(db, path, newId), {
+      const { error: insertError } = await supabase.from('messages').insert({
+        id: newId,
+        user_id: userId,
         role: 'assistant',
-        content: 'Memory wiped. Systems rebooted.',
-        createdAt: serverTimestamp()
+        content: 'Memory wiped. Systems rebooted.'
       });
+      if (insertError) throw insertError;
     } catch (error) {
       setMessages([...previousMessages, {
         role: 'assistant',

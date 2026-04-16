@@ -501,7 +501,7 @@ function AppContent() {
                     details="Connected to secure network."
                   />
                   <DiagnosticItem 
-                    label="Firebase Sync" 
+                    label="Supabase Sync" 
                     status={user ? 'online' : 'offline'} 
                     details="Real-time data persistence and authentication."
                   />

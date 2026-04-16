@@ -1,7 +1,6 @@
 import React, { createContext, useContext, ReactNode, useState, useEffect, useMemo, useCallback } from 'react';
 import { useNeuralSystems } from '../hooks/useNeuralSystems';
-import { auth } from '../firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth, onAuthStateChanged, User } from '../firebase';
 
 export type Persona = 'NEO' | 'FRIDAY' | 'EDITH' | 'ULTRON';
 

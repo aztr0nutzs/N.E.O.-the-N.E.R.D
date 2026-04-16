@@ -1,9 +1,71 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithRedirect, signOut } from 'firebase/auth';
-import firebaseConfig from '../firebase-applet-config.json';
+import { createClient, User as SupabaseUser } from '@supabase/supabase-js';
 
-export const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Supabase environment variables are missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export interface User {
+  uid: string;
+  email: string | null;
+  emailVerified: boolean;
+  isAnonymous: boolean;
+  tenantId: string | null;
+  providerData: Array<{
+    providerId: string;
+    displayName: string | null;
+    email: string | null;
+    photoURL: string | null;
+  }>;
+}
+
+function mapUser(user: SupabaseUser): User {
+  const provider = user.app_metadata?.provider;
+  return {
+    uid: user.id,
+    email: user.email ?? null,
+    emailVerified: !!user.email_confirmed_at,
+    isAnonymous: provider === 'anonymous',
+    tenantId: null,
+    providerData: [
+      {
+        providerId: typeof provider === 'string' ? provider : 'unknown',
+        displayName: (user.user_metadata?.full_name as string | undefined) ?? null,
+        email: user.email ?? null,
+        photoURL: (user.user_metadata?.avatar_url as string | undefined) ?? null
+      }
+    ]
+  };
+}
+
+let currentMappedUser: User | null = null;
+const authStateListeners = new Set<(user: User | null) => void>();
+
+const updateCurrentUser = (sessionUser: SupabaseUser | null | undefined) => {
+  currentMappedUser = sessionUser ? mapUser(sessionUser) : null;
+  authStateListeners.forEach((listener) => listener(currentMappedUser));
+};
+
+const initializeAuthState = async () => {
+  const { data } = await supabase.auth.getSession();
+  updateCurrentUser(data.session?.user);
+};
+
+void initializeAuthState();
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  updateCurrentUser(session?.user);
+});
+
+export const auth = {
+  get currentUser() {
+    return currentMappedUser;
+  }
+};
 
 const AUTH_REQUIRED_MESSAGE = 'Secure link offline. Sign in again to continue.';
 const AUTH_EXPIRED_MESSAGE = 'Secure link expired. Sign in again to continue.';
@@ -23,9 +85,14 @@ export class ClientSafeError extends Error {
 }
 
 export const loginWithGoogle = async () => {
-  const provider = new GoogleAuthProvider();
   try {
-    await signInWithRedirect(auth, provider);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin
+      }
+    });
+    if (error) throw error;
   } catch (error: any) {
     console.error("Error signing in with Google", error);
   }
@@ -33,11 +100,19 @@ export const loginWithGoogle = async () => {
 
 export const logout = async () => {
   try {
-    await signOut(auth);
+    await supabase.auth.signOut();
   } catch (error) {
     console.error("Error signing out", error);
   }
 };
+
+export function onAuthStateChanged(callback: (user: User | null) => void) {
+  authStateListeners.add(callback);
+  callback(auth.currentUser);
+  return () => {
+    authStateListeners.delete(callback);
+  };
+}
 
 export async function getProtectedIdToken(forceRefresh = false) {
   const currentUser = auth.currentUser;
@@ -46,7 +121,19 @@ export async function getProtectedIdToken(forceRefresh = false) {
   }
 
   try {
-    return await currentUser.getIdToken(forceRefresh);
+    if (forceRefresh) {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) throw error;
+      const refreshedToken = data.session?.access_token;
+      if (!refreshedToken) throw new Error('No session token available');
+      return refreshedToken;
+    }
+
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    const token = data.session?.access_token;
+    if (!token) throw new Error('No session token available');
+    return token;
   } catch (error) {
     if (import.meta.env.DEV) {
       console.error('Protected token refresh failed:', error);

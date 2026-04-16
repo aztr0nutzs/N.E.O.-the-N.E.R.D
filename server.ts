@@ -4,16 +4,18 @@ import path from "path";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
-import * as admin from "firebase-admin";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
-// Initialize Firebase Admin (will use default credentials if available)
-try {
-  admin.initializeApp();
-} catch (e) {
-  console.warn("Firebase Admin initialization failed. Auth verification may be limited.", e);
-}
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAdmin =
+  supabaseUrl && supabaseServiceRoleKey
+    ? createClient(supabaseUrl, supabaseServiceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false }
+      })
+    : null;
 
 // Rate limiting
 const apiLimiter = rateLimit({
@@ -31,12 +33,18 @@ const requireAuth = async (req: express.Request, res: express.Response, next: ex
   
   const token = authHeader.split('Bearer ')[1];
   try {
-    if (admin.apps.length === 0) {
-      console.error("Firebase Admin not initialized. Cannot verify tokens.");
+    if (!supabaseAdmin) {
+      console.error("Supabase admin client not configured. Cannot verify tokens.");
       return res.status(500).json({ error: "Internal server error: Auth misconfiguration" });
     }
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    (req as any).user = decodedToken;
+
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !data.user) {
+      console.error("Supabase auth error:", error);
+      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+    }
+
+    (req as any).user = data.user;
     next();
   } catch (error) {
     console.error("Auth error:", error);

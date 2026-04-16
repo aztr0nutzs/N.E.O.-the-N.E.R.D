@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Panel } from './Panel';
 import { CheckSquare, Square, AlertTriangle, Plus, Trash2 } from 'lucide-react';
-import { handleFirestoreError, OperationType } from '../firebase';
-import { db } from '../firestore';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { handleFirestoreError, OperationType, supabase } from '../firebase';
 import { useNeuralAuth } from '../context/NeuralContext';
 
 interface Task {
@@ -29,31 +27,51 @@ export function TaskLog() {
       return;
     }
 
-    const path = `users/${userId}/tasks`;
-    const q = query(collection(db, path), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loadedTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
-      // Sort by priority (high first)
-      loadedTasks.sort((a, b) => {
-        if (a.priority === 'high' && b.priority !== 'high') return -1;
-        if (a.priority !== 'high' && b.priority === 'high') return 1;
-        return 0;
-      });
-      setTasks(loadedTasks);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
-    });
+    const loadTasks = async () => {
+      const path = `tasks:user_id=${userId}`;
+      try {
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('id, title, completed, priority, user_id, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
 
-    return () => unsubscribe();
+        if (error) throw error;
+
+        const loadedTasks = (data ?? []).map((row) => ({
+          id: row.id,
+          title: row.title,
+          completed: row.completed,
+          priority: row.priority as 'high' | 'normal',
+          userId: row.user_id,
+          createdAt: row.created_at
+        } as Task));
+
+        loadedTasks.sort((a, b) => {
+          if (a.priority === 'high' && b.priority !== 'high') return -1;
+          if (a.priority !== 'high' && b.priority === 'high') return 1;
+          return 0;
+        });
+        setTasks(loadedTasks);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, path);
+      }
+    };
+
+    void loadTasks();
   }, [userId]);
 
   const toggleTask = async (task: Task) => {
     if (!userId) return;
     const path = `users/${userId}/tasks/${task.id}`;
     try {
-      await updateDoc(doc(db, `users/${userId}/tasks`, task.id), {
-        completed: !task.completed
-      });
+      const { error } = await supabase
+        .from('tasks')
+        .update({ completed: !task.completed })
+        .eq('id', task.id)
+        .eq('user_id', userId);
+      if (error) throw error;
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: !t.completed } : t));
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
     }
@@ -71,16 +89,27 @@ export function TaskLog() {
     const newId = Date.now().toString();
     const path = `users/${userId}/tasks/${newId}`;
     const taskData = {
+      id: newId,
       title: newTaskTitle.trim(),
       completed: false,
       priority: newTaskTitle.toLowerCase().includes('urgent') ? 'high' : 'normal',
-      userId,
-      createdAt: serverTimestamp()
+      user_id: userId
     };
 
     setNewTaskTitle('');
     try {
-      await setDoc(doc(db, `users/${userId}/tasks`, newId), taskData);
+      const { data, error } = await supabase.from('tasks').insert(taskData).select().single();
+      if (error) throw error;
+      if (data) {
+        setTasks(prev => [{
+          id: data.id,
+          title: data.title,
+          completed: data.completed,
+          priority: data.priority as 'high' | 'normal',
+          userId: data.user_id,
+          createdAt: data.created_at
+        }, ...prev]);
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
     }
@@ -91,7 +120,13 @@ export function TaskLog() {
     if (!userId) return;
     const path = `users/${userId}/tasks/${id}`;
     try {
-      await deleteDoc(doc(db, `users/${userId}/tasks`, id));
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+      if (error) throw error;
+      setTasks(prev => prev.filter(task => task.id !== id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
     }
