@@ -51,8 +51,15 @@ const updateCurrentUser = (sessionUser: SupabaseUser | null | undefined) => {
 };
 
 const initializeAuthState = async () => {
-  const { data } = await supabase.auth.getSession();
-  updateCurrentUser(data.session?.user);
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    updateCurrentUser(data.session?.user);
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error('Failed to restore authentication session. User may need to sign in again:', error);
+    }
+  }
 };
 
 void initializeAuthState();
@@ -136,7 +143,7 @@ export async function getProtectedIdToken(forceRefresh = false) {
     return token;
   } catch (error) {
     if (import.meta.env.DEV) {
-      console.error('Protected token refresh failed:', error);
+      console.error('Token refresh failed. User may need to re-authenticate:', error);
     }
     throw new ClientSafeError(AUTH_EXPIRED_MESSAGE, 401);
   }

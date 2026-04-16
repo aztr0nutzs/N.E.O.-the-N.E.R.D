@@ -28,7 +28,7 @@ export function TaskLog() {
     }
 
     const loadTasks = async () => {
-      const path = `tasks:user_id=${userId}`;
+      const errorContext = `tasks:user_id=${userId}`;
       try {
         const { data, error } = await supabase
           .from('tasks')
@@ -54,7 +54,7 @@ export function TaskLog() {
         });
         setTasks(loadedTasks);
       } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, path);
+        handleFirestoreError(error, OperationType.LIST, errorContext);
       }
     };
 
@@ -63,7 +63,7 @@ export function TaskLog() {
 
   const toggleTask = async (task: Task) => {
     if (!userId) return;
-    const path = `users/${userId}/tasks/${task.id}`;
+    const path = `tasks/${task.id}`;
     try {
       const { error } = await supabase
         .from('tasks')
@@ -87,7 +87,7 @@ export function TaskLog() {
     if (!userId) return;
 
     const newId = Date.now().toString();
-    const path = `users/${userId}/tasks/${newId}`;
+    const path = `tasks/${newId}`;
     const taskData = {
       id: newId,
       title: newTaskTitle.trim(),
@@ -118,7 +118,7 @@ export function TaskLog() {
   const deleteTask = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!userId) return;
-    const path = `users/${userId}/tasks/${id}`;
+    const path = `tasks/${id}`;
     try {
       const { error } = await supabase
         .from('tasks')

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, ReactNode, useState, useEffect, useMemo, useCallback } from 'react';
 import { useNeuralSystems } from '../hooks/useNeuralSystems';
-import { auth, onAuthStateChanged, User } from '../firebase';
+import { onAuthStateChanged, User } from '../firebase';
 
 export type Persona = 'NEO' | 'FRIDAY' | 'EDITH' | 'ULTRON';
 
@@ -76,7 +76,7 @@ export function NeuralProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged((currentUser) => {
       setUser(currentUser);
       setAuthLoading(false);
     });
