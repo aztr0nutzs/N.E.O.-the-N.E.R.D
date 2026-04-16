@@ -604,6 +604,7 @@ export function ChatInterface() {
         videoUrl: generatedVideoUrl
       };
 
+      setMessages(prev => [...prev, newAssistantMsg]);
       await saveMessage(newAssistantMsg);
 
       if (mode === 'tts') {
