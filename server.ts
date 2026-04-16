@@ -34,7 +34,7 @@ const requireAuth = async (req: express.Request, res: express.Response, next: ex
   const token = authHeader.split('Bearer ')[1];
   try {
     if (!supabaseAdmin) {
-      console.error("Supabase admin client not configured. Cannot verify tokens.");
+      console.error("Supabase admin client not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
       return res.status(500).json({ error: "Internal server error: Auth misconfiguration" });
     }
 

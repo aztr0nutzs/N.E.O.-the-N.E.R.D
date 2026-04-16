@@ -56,7 +56,7 @@ const initializeAuthState = async () => {
     if (error) throw error;
     updateCurrentUser(data.session?.user);
   } catch (error) {
-    console.warn('Failed to restore authentication session. User may need to sign in again:', error);
+    console.warn('Authentication session could not be restored. Please sign in to continue.', error);
     updateCurrentUser(null);
   }
 };
