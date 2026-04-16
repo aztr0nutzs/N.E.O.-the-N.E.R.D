@@ -1,8 +1,4 @@
-import { initializeApp } from 'firebase/app';
-import firebaseConfig from '../firebase-applet-config.json';
 import { supabase } from './lib/supabase';
-
-export const app = initializeApp(firebaseConfig);
 
 const AUTH_REQUIRED_MESSAGE = 'Secure link offline. Sign in again to continue.';
 const AUTH_EXPIRED_MESSAGE = 'Secure link expired. Sign in again to continue.';
@@ -203,7 +199,7 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-export interface FirestoreErrorInfo {
+export interface DataAccessErrorInfo {
   error: string;
   operationType: OperationType;
   path: string | null;
@@ -224,7 +220,7 @@ export interface FirestoreErrorInfo {
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const user = auth.currentUser;
-  const errInfo: FirestoreErrorInfo = {
+  const errInfo: DataAccessErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
       userId: user?.id,
@@ -244,7 +240,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   };
 
   if (import.meta.env.DEV) {
-    console.error('Detailed Firestore Error: ', JSON.stringify(errInfo, null, 2));
+    console.error('Detailed data access error: ', JSON.stringify(errInfo, null, 2));
   }
 
   const baseMessage = error instanceof Error ? error.message : String(error);

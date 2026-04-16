@@ -501,9 +501,9 @@ function AppContent() {
                     details="Connected to secure network."
                   />
                   <DiagnosticItem 
-                    label="Firebase Sync" 
+                    label="Supabase Sync" 
                     status={user ? 'online' : 'offline'} 
-                    details="Real-time data persistence and authentication."
+                    details="Secure cloud persistence and authentication."
                   />
                   <div className="mt-auto pt-4 border-t border-gray-800 flex justify-between items-center">
                     <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">
