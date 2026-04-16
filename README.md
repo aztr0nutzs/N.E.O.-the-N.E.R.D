@@ -19,6 +19,7 @@ View your app in AI Studio: https://ai.studio/apps/6659e9ee-c302-4009-8ef3-45236
    - `GEMINI_API_KEY`
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
+   - `SUPABASE_URL` (same value as `VITE_SUPABASE_URL`)
    - `SUPABASE_SERVICE_ROLE_KEY`
 3. In Supabase SQL Editor, create required tables:
    ```sql
@@ -46,9 +47,11 @@ View your app in AI Studio: https://ai.studio/apps/6659e9ee-c302-4009-8ef3-45236
    alter table public.tasks enable row level security;
 
    create policy "Users manage own messages" on public.messages
-     for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+     for all using (auth.uid() is not null and auth.uid() = user_id)
+     with check (auth.uid() is not null and auth.uid() = user_id);
    create policy "Users manage own tasks" on public.tasks
-     for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+     for all using (auth.uid() is not null and auth.uid() = user_id)
+     with check (auth.uid() is not null and auth.uid() = user_id);
    ```
 4. In Supabase Auth, enable Google provider and set redirect URL to `http://localhost:3000`.
 5. Run the app:
