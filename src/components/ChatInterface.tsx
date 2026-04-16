@@ -2,9 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Terminal, Image as ImageIcon, Search, MapPin, Brain, Zap, Video, Mic, Volume2, X, Cpu, Shield, Trash2 } from 'lucide-react';
 
 import { auth, fetchProtectedJson, getClientSafeMessage, handleFirestoreError, OperationType } from '../firebase';
-import { db } from '../firestore';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, serverTimestamp, getDocs } from 'firebase/firestore';
 import { Persona, useNeuralAuth, useNeuralSystem, useNeuralUi } from '../context/NeuralContext';
+import { supabase } from '../lib/supabase';
 
 interface Message {
   id?: string;
@@ -14,6 +13,16 @@ interface Message {
   videoUrl?: string;
   audioData?: string;
   createdAt?: any;
+}
+
+interface MessageRow {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  image_url: string | null;
+  video_url: string | null;
+  audio_data: string | null;
+  created_at: string;
 }
 
 type ChatMode = 'standard' | 'search' | 'maps' | 'think' | 'fast' | 'vision' | 'image' | 'video' | 'tts';
@@ -118,31 +127,61 @@ export function ChatInterface() {
 
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
+  const mapMessageRow = (message: MessageRow): Message => ({
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    imageUrl: message.image_url ?? undefined,
+    videoUrl: message.video_url ?? undefined,
+    audioData: message.audio_data ?? undefined,
+    createdAt: message.created_at,
+  });
+
   useEffect(() => {
+    let isMounted = true;
+
     if (!userId) {
       setMessages([{ role: 'assistant', content: DEFAULT_GREETING }]);
       return;
     }
 
-    const path = `users/${userId}/messages`;
-    const q = query(collection(db, path), orderBy('createdAt', 'asc'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loadedMessages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
-      if (loadedMessages.length === 0) {
-        setMessages([{ role: 'assistant', content: DEFAULT_GREETING }]);
-      } else {
-        setMessages(loadedMessages);
-      }
-    }, (error) => {
+    const loadMessages = async () => {
+      const path = 'messages';
       try {
-        handleFirestoreError(error, OperationType.LIST, path);
-      } catch (handledError) {
-        setMessages([{ role: 'assistant', content: `${HISTORY_SYNC_MESSAGE} ${getClientSafeMessage(handledError)}` }]);
-      }
-    });
+        const { data, error } = await supabase
+          .from('messages')
+          .select('id, role, content, image_url, video_url, audio_data, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: true });
 
-    return () => unsubscribe();
+        if (error) {
+          throw error;
+        }
+
+        const loadedMessages = (data as MessageRow[] | null)?.map(mapMessageRow) ?? [];
+        if (!isMounted) return;
+
+        if (loadedMessages.length === 0) {
+          setMessages([{ role: 'assistant', content: DEFAULT_GREETING }]);
+        } else {
+          setMessages(loadedMessages);
+        }
+      } catch (error) {
+        try {
+          handleFirestoreError(error, OperationType.LIST, path);
+        } catch (handledError) {
+          if (isMounted) {
+            setMessages([{ role: 'assistant', content: `${HISTORY_SYNC_MESSAGE} ${getClientSafeMessage(handledError)}` }]);
+          }
+        }
+      }
+    };
+
+    void loadMessages();
+
+    return () => {
+      isMounted = false;
+    };
   }, [userId]);
 
   useEffect(() => {
@@ -211,11 +250,11 @@ export function ChatInterface() {
         throw new Error('Generated media could not be downloaded.');
       }
       return await response.blob();
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
+    } catch (handledError) {
+      if (handledError instanceof DOMException && handledError.name === 'AbortError') {
         throw new Error('Generated media download timed out. Please try again.');
       }
-      throw error;
+      throw handledError;
     } finally {
       window.clearTimeout(timeoutId);
     }
@@ -313,12 +352,22 @@ export function ChatInterface() {
   const saveMessage = async (msg: Message) => {
     if (!userId) return false;
     const newId = Date.now().toString() + Math.random().toString(36).substring(7);
-    const path = `users/${userId}/messages/${newId}`;
+    const path = `messages/${newId}`;
     try {
-      await setDoc(doc(db, `users/${userId}/messages`, newId), {
-        ...msg,
-        createdAt: serverTimestamp()
+      const { error } = await supabase.from('messages').insert({
+        id: newId,
+        user_id: userId,
+        role: msg.role,
+        content: msg.content,
+        image_url: msg.imageUrl ?? null,
+        video_url: msg.videoUrl ?? null,
+        audio_data: msg.audioData ?? null,
       });
+
+      if (error) {
+        throw error;
+      }
+
       return true;
     } catch (error) {
       try {
@@ -344,24 +393,27 @@ export function ChatInterface() {
     setMessages([{ role: 'assistant', content: 'Memory wiped. Systems rebooted.' }]);
 
     try {
-      // Delete all messages from Firestore
-      const path = `users/${userId}/messages`;
-      const q = query(collection(db, path));
-      const snapshot = await getDocs(q);
-      
-      const deletePromises = snapshot.docs.map(docSnapshot => 
-        deleteDoc(doc(db, path, docSnapshot.id))
-      );
-      
-      await Promise.all(deletePromises);
+      const path = 'messages';
+      const { error: deleteError } = await supabase
+        .from('messages')
+        .delete()
+        .eq('user_id', userId);
 
-      // Add the reboot message
+      if (deleteError) {
+        throw deleteError;
+      }
+
       const newId = Date.now().toString();
-      await setDoc(doc(db, path, newId), {
+      const { error: insertError } = await supabase.from('messages').insert({
+        id: newId,
+        user_id: userId,
         role: 'assistant',
         content: 'Memory wiped. Systems rebooted.',
-        createdAt: serverTimestamp()
       });
+
+      if (insertError) {
+        throw insertError;
+      }
     } catch (error) {
       setMessages([...previousMessages, {
         role: 'assistant',
