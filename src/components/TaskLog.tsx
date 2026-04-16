@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Panel } from './Panel';
 import { CheckSquare, Square, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import { handleFirestoreError, OperationType } from '../firebase';
-import { db } from '../firestore';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useNeuralAuth } from '../context/NeuralContext';
+import { supabase } from '../lib/supabase';
 
 interface Task {
   id: string;
@@ -24,36 +23,77 @@ export function TaskLog() {
   const userId = user?.id;
 
   useEffect(() => {
+    let isMounted = true;
+
     if (!userId) {
       setTasks([]);
       return;
     }
 
-    const path = `users/${userId}/tasks`;
-    const q = query(collection(db, path), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loadedTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
-      // Sort by priority (high first)
-      loadedTasks.sort((a, b) => {
-        if (a.priority === 'high' && b.priority !== 'high') return -1;
-        if (a.priority !== 'high' && b.priority === 'high') return 1;
-        return 0;
-      });
-      setTasks(loadedTasks);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
-    });
+    const loadTasks = async () => {
+      const path = 'tasks';
+      try {
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('id, title, completed, priority, user_id, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
 
-    return () => unsubscribe();
+        if (error) {
+          throw error;
+        }
+
+        const loadedTasks = (data ?? []).map((task) => ({
+          id: task.id,
+          title: task.title,
+          completed: task.completed,
+          priority: task.priority,
+          userId: task.user_id,
+          createdAt: task.created_at,
+        })) as Task[];
+
+        loadedTasks.sort((a, b) => {
+          if (a.priority === 'high' && b.priority !== 'high') return -1;
+          if (a.priority !== 'high' && b.priority === 'high') return 1;
+          return 0;
+        });
+
+        if (isMounted) {
+          setTasks(loadedTasks);
+        }
+      } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, path);
+      }
+    };
+
+    void loadTasks();
+
+    return () => {
+      isMounted = false;
+    };
   }, [userId]);
 
   const toggleTask = async (task: Task) => {
     if (!userId) return;
-    const path = `users/${userId}/tasks/${task.id}`;
+    const path = `tasks/${task.id}`;
     try {
-      await updateDoc(doc(db, `users/${userId}/tasks`, task.id), {
-        completed: !task.completed
-      });
+      const { error } = await supabase
+        .from('tasks')
+        .update({ completed: !task.completed })
+        .eq('id', task.id)
+        .eq('user_id', userId);
+
+      if (error) {
+        throw error;
+      }
+
+      setTasks((currentTasks) =>
+        currentTasks.map((currentTask) =>
+          currentTask.id === task.id
+            ? { ...currentTask, completed: !currentTask.completed }
+            : currentTask
+        )
+      );
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
     }
@@ -69,18 +109,48 @@ export function TaskLog() {
     if (!userId) return;
 
     const newId = Date.now().toString();
-    const path = `users/${userId}/tasks/${newId}`;
+    const path = `tasks/${newId}`;
     const taskData = {
+      id: newId,
       title: newTaskTitle.trim(),
       completed: false,
       priority: newTaskTitle.toLowerCase().includes('urgent') ? 'high' : 'normal',
-      userId,
-      createdAt: serverTimestamp()
+      user_id: userId,
     };
 
     setNewTaskTitle('');
     try {
-      await setDoc(doc(db, `users/${userId}/tasks`, newId), taskData);
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert(taskData)
+        .select('id, title, completed, priority, user_id, created_at')
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      setTasks((currentTasks) => {
+        const nextTasks = [
+          {
+            id: data.id,
+            title: data.title,
+            completed: data.completed,
+            priority: data.priority,
+            userId: data.user_id,
+            createdAt: data.created_at,
+          } as Task,
+          ...currentTasks,
+        ];
+
+        nextTasks.sort((a, b) => {
+          if (a.priority === 'high' && b.priority !== 'high') return -1;
+          if (a.priority !== 'high' && b.priority === 'high') return 1;
+          return 0;
+        });
+
+        return nextTasks;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
     }
@@ -89,9 +159,19 @@ export function TaskLog() {
   const deleteTask = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!userId) return;
-    const path = `users/${userId}/tasks/${id}`;
+    const path = `tasks/${id}`;
     try {
-      await deleteDoc(doc(db, `users/${userId}/tasks`, id));
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+
+      if (error) {
+        throw error;
+      }
+
+      setTasks((currentTasks) => currentTasks.filter((task) => task.id !== id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
     }
