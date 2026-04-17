@@ -1,0 +1,21 @@
+---
+description: Firebase → Supabase client migration guardrails (N.E.O.)
+globs: src/firebase.ts,src/firestore.ts,src/lib/**/*.ts,src/context/**/*.tsx,src/components/TaskLog.tsx,src/components/ChatInterface.tsx
+alwaysApply: false
+---
+
+# Client migration rules
+
+When changing files matched by this rule, read and follow `.cursor/skills/neo-supabase-migration-pass/SKILL.md` for the full migration pass (order, preconditions, cleanup rules). Before claiming work is complete, use `.cursor/skills/neo-verify-gates/SKILL.md` for lint/build and reporting.
+
+## Direction
+- Target: `src/lib/supabase.ts` (browser client), session from `supabase.auth`, bearer token for `fetchProtectedJson` / server routes.
+- Replace Firestore usage with Supabase queries to `tasks` and `messages` with `user_id` scoping; **RLS must enforce `auth.uid()`**.
+
+## Safety
+- Prefer **small PR-sized edits**: auth first, then tasks, then messages, then cleanup.
+- Do not delete `src/firebase.ts` until **no imports** remain and `npm run lint` + `npm run build` pass.
+- Preserve user-facing strings where possible.
+
+## Verification
+- After edits: `npm ci` (or `npm install` if instructed), `npm run lint`, `npm run build`, then manual: sign-in, tasks CRUD, chat/history, signed-in AI route.

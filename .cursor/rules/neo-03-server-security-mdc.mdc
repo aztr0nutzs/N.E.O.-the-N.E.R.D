@@ -1,0 +1,17 @@
+---
+description: Express server, Supabase JWT verification, Gemini routes — security and validation (N.E.O.)
+globs: server.ts
+alwaysApply: false
+---
+
+# Server.ts rules
+
+## Auth
+- Protected routes: **Bearer JWT** verified with server Supabase client (service role for `auth.getUser` / verification strategy already in repo). **Fail closed** if env misconfigured.
+- Never expose `SUPABASE_SERVICE_ROLE_KEY` or `GEMINI_API_KEY` to the client. Never loosen auth to "anonymous AI".
+
+## AI routes
+- Keep provider calls **server-side** only. Preserve allowlists (models, modalities, size limits) and rate limiting; **tighten validation** when in doubt, do not widen it.
+
+## Changes
+- Minimal diffs: one concern per change. Log errors without leaking secrets.

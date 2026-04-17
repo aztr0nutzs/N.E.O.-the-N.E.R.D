@@ -26,6 +26,21 @@ Finish one working backend. Do not maintain parallel Firebase and Supabase logic
 5. Fail closed on server auth.
 6. Use Row Level Security in Supabase for all user-owned data.
 
+## Agent skills (Cursor)
+
+Project skills live under **`.cursor/skills/<skill-name>/SKILL.md`**. Cursor loads them automatically when this folder is present in the workspace (rescan: restart Cursor or reload the window if a new skill does not appear).
+
+**In the UI:** **Settings** → **Rules** → **Agent Decides** (or the skills list shown with project rules) lists discovered skills.
+
+**In chat:** type **`/<skill-name>`** (e.g. `/neo-verify-gates`) or **`@`** and pick the skill to attach it.
+
+| Skill | Path | Use when |
+|------|------|----------|
+| `neo-supabase-migration-pass` | `.cursor/skills/neo-supabase-migration-pass/SKILL.md` | Firebase → Supabase migration slices (`firebase.ts`, Firestore paths, NeuralContext, TaskLog, ChatInterface, `src/lib/supabase.ts`, etc.). |
+| `neo-verify-gates` | `.cursor/skills/neo-verify-gates/SKILL.md` | After substantive changes: `npm ci` / `npm run lint` / `npm run build` and manual auth/data/AI checklist. |
+| `neo-ui-preservation` | `.cursor/skills/neo-ui-preservation/SKILL.md` | TaskLog, ChatInterface, App.tsx, or styling that could break the HUD / Robot2D visual contract. |
+| `neo-server-hardening` | `.cursor/skills/neo-server-hardening/SKILL.md` | `server.ts`: JWT auth, rate limits, Gemini allowlists, body limits, fail-closed env behavior. |
+
 ## Authoritative migration targets
 - Auth provider: Supabase Auth with Google sign-in
 - Data store: Supabase Postgres tables `tasks` and `messages`
