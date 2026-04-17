@@ -7,7 +7,7 @@ import { BottomDock } from './components/BottomDock';
 import { NerdLogo } from './components/NerdLogo';
 import { Power, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { loginWithGoogle, logout } from './firebase';
+import { consumeAuthRedirectError, getClientSafeMessage, initializeAuthRedirectHandling, isOAuthConsentPath, loginWithGoogle, logout, normalizeOAuthConsentPath } from './firebase';
 import { NeuralProvider, useNeuralAuth, useNeuralRealtime, useNeuralSystem } from './context/NeuralContext';
 
 const Robot2D = lazy(() => import('./components/Robot2D').then(module => ({ default: module.Robot2D })));
@@ -202,6 +202,39 @@ function AppContent() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionProgress, setConnectionProgress] = useState(0);
   const [connectionStep, setConnectionStep] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isAuthLaunching, setIsAuthLaunching] = useState(false);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+
+    void initializeAuthRedirectHandling().then((dispose) => {
+      cleanup = dispose;
+    });
+
+    return () => {
+      cleanup?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      if (isOAuthConsentPath()) {
+        normalizeOAuthConsentPath();
+      }
+      setAuthError(null);
+      setIsAuthLaunching(false);
+      return;
+    }
+
+    const redirectError = consumeAuthRedirectError();
+    if (redirectError) {
+      if (isOAuthConsentPath()) {
+        normalizeOAuthConsentPath();
+      }
+      setAuthError(redirectError);
+    }
+  }, [user]);
 
   const handleStartSystems = async () => {
     setIsConnecting(true);
@@ -226,6 +259,18 @@ function AppContent() {
       await startSystems();
     } finally {
       setIsConnecting(false);
+    }
+  };
+
+  const handleLogin = async () => {
+    setAuthError(null);
+    setIsAuthLaunching(true);
+
+    try {
+      await loginWithGoogle();
+    } catch (error) {
+      setIsAuthLaunching(false);
+      setAuthError(getClientSafeMessage(error, 'Google sign-in could not be started. Please try again.'));
     }
   };
 
@@ -263,20 +308,32 @@ function AppContent() {
           </div>
 
           <button 
-            onClick={loginWithGoogle}
-            className="w-full py-4 bg-cyber-blue/10 border border-cyber-blue text-cyber-blue font-mono font-bold tracking-widest rounded hover:bg-cyber-blue hover:text-black transition-all shadow-[0_0_15px_rgba(0,255,255,0.3)] mb-4"
+            onClick={handleLogin}
+            disabled={isAuthLaunching || isConnecting}
+            className="w-full py-4 bg-cyber-blue/10 border border-cyber-blue text-cyber-blue font-mono font-bold tracking-widest rounded hover:bg-cyber-blue hover:text-black transition-all shadow-[0_0_15px_rgba(0,255,255,0.3)] mb-4 disabled:opacity-50"
           >
-            INITIALIZE UPLINK
+            {isAuthLaunching ? 'OPENING GOOGLE...' : 'SIGN IN WITH GOOGLE'}
           </button>
 
+          {authError && (
+            <div className="w-full mb-4 border border-red-500/40 bg-red-500/10 px-4 py-3 text-[10px] font-mono uppercase tracking-wide text-red-300">
+              {authError}
+            </div>
+          )}
+
           {!isSystemsReady && (
-            <button 
-              onClick={handleStartSystems}
-              disabled={isConnecting}
-              className="w-full py-4 bg-neon-green/10 border border-neon-green text-neon-green font-mono font-bold tracking-widest rounded hover:bg-neon-green hover:text-black transition-all shadow-[0_0_15px_rgba(57,255,20,0.3)] disabled:opacity-50"
-            >
-              {isConnecting ? 'ESTABLISHING...' : 'ESTABLISH NEURAL LINK'}
-            </button>
+            <>
+              <button 
+                onClick={handleStartSystems}
+                disabled={isConnecting || isAuthLaunching}
+                className="w-full py-4 bg-neon-green/10 border border-neon-green text-neon-green font-mono font-bold tracking-widest rounded hover:bg-neon-green hover:text-black transition-all shadow-[0_0_15px_rgba(57,255,20,0.3)] disabled:opacity-50"
+              >
+                {isConnecting ? 'STARTING...' : 'START LOCAL SYSTEMS'}
+              </button>
+              <div className="mt-3 text-center text-[10px] font-mono uppercase tracking-wide text-gray-500">
+                Local startup only. Does not sign you in.
+              </div>
+            </>
           )}
         </div>
       </div>
