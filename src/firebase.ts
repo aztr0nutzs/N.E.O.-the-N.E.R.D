@@ -1,77 +1,4 @@
-import { createClient, User as SupabaseUser } from '@supabase/supabase-js';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Supabase environment variables are missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-export interface User {
-  uid: string;
-  email: string | null;
-  emailVerified: boolean;
-  isAnonymous: boolean;
-  tenantId: string | null;
-  providerData: Array<{
-    providerId: string;
-    displayName: string | null;
-    email: string | null;
-    photoURL: string | null;
-  }>;
-}
-
-function mapUser(user: SupabaseUser): User {
-  const provider = user.app_metadata?.provider;
-  return {
-    uid: user.id,
-    email: user.email ?? null,
-    emailVerified: !!user.email_confirmed_at,
-    isAnonymous: provider === 'anonymous',
-    tenantId: null,
-    providerData: [
-      {
-        providerId: typeof provider === 'string' ? provider : 'unknown',
-        displayName: (user.user_metadata?.full_name as string | undefined) ?? null,
-        email: user.email ?? null,
-        photoURL: (user.user_metadata?.avatar_url as string | undefined) ?? null
-      }
-    ]
-  };
-}
-
-let currentMappedUser: User | null = null;
-const authStateListeners = new Set<(user: User | null) => void>();
-
-const updateCurrentUser = (sessionUser: SupabaseUser | null | undefined) => {
-  currentMappedUser = sessionUser ? mapUser(sessionUser) : null;
-  authStateListeners.forEach((listener) => listener(currentMappedUser));
-};
-
-const initializeAuthState = async () => {
-  try {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) throw error;
-    updateCurrentUser(data.session?.user);
-  } catch (error) {
-    console.warn('Authentication session could not be restored. Please sign in to continue.', error);
-    updateCurrentUser(null);
-  }
-};
-
-void initializeAuthState();
-
-supabase.auth.onAuthStateChange((_event, session) => {
-  updateCurrentUser(session?.user);
-});
-
-export const auth = {
-  get currentUser() {
-    return currentMappedUser;
-  }
-};
+import { supabase } from './lib/supabase';
 
 const AUTH_REQUIRED_MESSAGE = 'Secure link offline. Sign in again to continue.';
 const AUTH_EXPIRED_MESSAGE = 'Secure link expired. Sign in again to continue.';
@@ -79,6 +6,24 @@ const RATE_LIMIT_MESSAGE = 'Main servers are rate-limiting requests. Please wait
 const SERVER_UNAVAILABLE_MESSAGE = 'Main servers are temporarily unavailable. Please try again shortly.';
 const NETWORK_ERROR_MESSAGE = 'Main servers are unreachable. Check your connection and try again.';
 const REQUEST_TIMEOUT_MESSAGE = 'Main servers timed out. Please try again.';
+
+type AuthUser = Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'];
+
+let currentUser: AuthUser | null = null;
+
+void supabase.auth.getSession().then(({ data }) => {
+  currentUser = data.session?.user ?? null;
+});
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  currentUser = session?.user ?? null;
+});
+
+export const auth = {
+  get currentUser() {
+    return currentUser;
+  },
+};
 
 export class ClientSafeError extends Error {
   status?: number;
@@ -95,57 +40,59 @@ export const loginWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin
-      }
+        redirectTo: window.location.origin,
+      },
     });
-    if (error) throw error;
-  } catch (error: any) {
-    console.error("Error signing in with Google", error);
+
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error signing in with Google', error);
   }
 };
 
 export const logout = async () => {
   try {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      throw error;
+    }
   } catch (error) {
-    console.error("Error signing out", error);
+    console.error('Error signing out', error);
   }
 };
 
-export function onAuthStateChanged(callback: (user: User | null) => void) {
-  authStateListeners.add(callback);
-  callback(auth.currentUser);
-  return () => {
-    authStateListeners.delete(callback);
-  };
+async function getCurrentSession(forceRefresh = false) {
+  if (forceRefresh) {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) {
+      throw error;
+    }
+    return data.session;
+  }
+
+  const { data, error } = await supabase.auth.getSession();
+  if (error) {
+    throw error;
+  }
+  return data.session;
 }
 
 export async function getProtectedIdToken(forceRefresh = false) {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
+  const session = await getCurrentSession(forceRefresh).catch((error) => {
+    if (import.meta.env.DEV) {
+      console.error('Protected token refresh failed:', error);
+    }
+    throw new ClientSafeError(AUTH_EXPIRED_MESSAGE, 401);
+  });
+
+  if (!session?.access_token) {
     throw new ClientSafeError(AUTH_REQUIRED_MESSAGE, 401);
   }
 
-  try {
-    if (forceRefresh) {
-      const { data, error } = await supabase.auth.refreshSession();
-      if (error) throw error;
-      const refreshedToken = data.session?.access_token;
-      if (!refreshedToken) throw new Error('No session token available');
-      return refreshedToken;
-    }
-
-    const { data, error } = await supabase.auth.getSession();
-    if (error) throw error;
-    const token = data.session?.access_token;
-    if (!token) throw new Error('No session token available');
-    return token;
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.error('Token refresh failed. User may need to re-authenticate:', error);
-    }
-    throw new ClientSafeError(AUTH_EXPIRED_MESSAGE, 401);
-  }
+  currentUser = session.user ?? null;
+  return session.access_token;
 }
 
 export function getClientSafeMessage(error: unknown, fallbackMessage = 'Operation failed. Please try again.') {
@@ -252,7 +199,7 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-export interface FirestoreErrorInfo {
+export interface DataAccessErrorInfo {
   error: string;
   operationType: OperationType;
   path: string | null;
@@ -262,34 +209,40 @@ export interface FirestoreErrorInfo {
     emailVerified?: boolean;
     isAnonymous?: boolean;
     tenantId?: string | null;
-    providerInfo?: any[];
-  }
+    providerInfo?: Array<{
+      providerId: string;
+      displayName?: string | null;
+      email?: string | null;
+      photoUrl?: string | null;
+    }>;
+  };
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
+  const user = auth.currentUser;
+  const errInfo: DataAccessErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
+      userId: user?.id,
+      email: user?.email ?? null,
+      emailVerified: !!user?.email_confirmed_at,
+      isAnonymous: user?.is_anonymous ?? false,
+      tenantId: null,
+      providerInfo: (user?.identities ?? []).map((provider) => ({
+        providerId: provider.provider || 'unknown',
+        displayName: (provider.identity_data?.full_name as string | undefined) ?? null,
+        email: (provider.identity_data?.email as string | undefined) ?? null,
+        photoUrl: (provider.identity_data?.avatar_url as string | undefined) ?? null,
+      })),
     },
     operationType,
-    path
-  }
+    path,
+  };
+
   if (import.meta.env.DEV) {
-    console.error('Detailed Firestore Error: ', JSON.stringify(errInfo, null, 2));
+    console.error('Detailed data access error: ', JSON.stringify(errInfo, null, 2));
   }
-  
-  // Surface cleaner app-facing errors
+
   const baseMessage = error instanceof Error ? error.message : String(error);
   if (baseMessage.includes('Missing or insufficient permissions')) {
     throw new Error(`Permission denied while trying to ${operationType} data at ${path || 'unknown path'}.`);

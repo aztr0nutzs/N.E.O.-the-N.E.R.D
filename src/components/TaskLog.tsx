@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Panel } from './Panel';
 import { CheckSquare, Square, AlertTriangle, Plus, Trash2 } from 'lucide-react';
-import { handleFirestoreError, OperationType, supabase } from '../firebase';
+import { handleFirestoreError, OperationType } from '../firebase';
 import { useNeuralAuth } from '../context/NeuralContext';
+import { supabase } from '../lib/supabase';
 
 interface Task {
   id: string;
@@ -19,16 +20,18 @@ export function TaskLog() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [error, setError] = useState('');
 
-  const userId = user?.uid;
+  const userId = user?.id;
 
   useEffect(() => {
+    let isMounted = true;
+
     if (!userId) {
       setTasks([]);
       return;
     }
 
     const loadTasks = async () => {
-      const errorContext = `tasks:user_id=${userId}`;
+      const path = 'tasks';
       try {
         const { data, error } = await supabase
           .from('tasks')
@@ -36,29 +39,38 @@ export function TaskLog() {
           .eq('user_id', userId)
           .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
 
-        const loadedTasks = (data ?? []).map((row) => ({
-          id: row.id,
-          title: row.title,
-          completed: row.completed,
-          priority: row.priority as 'high' | 'normal',
-          userId: row.user_id,
-          createdAt: row.created_at
-        } as Task));
+        const loadedTasks = (data ?? []).map((task) => ({
+          id: task.id,
+          title: task.title,
+          completed: task.completed,
+          priority: task.priority,
+          userId: task.user_id,
+          createdAt: task.created_at,
+        })) as Task[];
 
         loadedTasks.sort((a, b) => {
           if (a.priority === 'high' && b.priority !== 'high') return -1;
           if (a.priority !== 'high' && b.priority === 'high') return 1;
           return 0;
         });
-        setTasks(loadedTasks);
+
+        if (isMounted) {
+          setTasks(loadedTasks);
+        }
       } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, errorContext);
+        handleFirestoreError(error, OperationType.LIST, path);
       }
     };
 
     void loadTasks();
+
+    return () => {
+      isMounted = false;
+    };
   }, [userId]);
 
   const toggleTask = async (task: Task) => {
@@ -70,8 +82,18 @@ export function TaskLog() {
         .update({ completed: !task.completed })
         .eq('id', task.id)
         .eq('user_id', userId);
-      if (error) throw error;
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: !t.completed } : t));
+
+      if (error) {
+        throw error;
+      }
+
+      setTasks((currentTasks) =>
+        currentTasks.map((currentTask) =>
+          currentTask.id === task.id
+            ? { ...currentTask, completed: !currentTask.completed }
+            : currentTask
+        )
+      );
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
     }
@@ -93,23 +115,42 @@ export function TaskLog() {
       title: newTaskTitle.trim(),
       completed: false,
       priority: newTaskTitle.toLowerCase().includes('urgent') ? 'high' : 'normal',
-      user_id: userId
+      user_id: userId,
     };
 
     setNewTaskTitle('');
     try {
-      const { data, error } = await supabase.from('tasks').insert(taskData).select().single();
-      if (error) throw error;
-      if (data) {
-        setTasks(prev => [{
-          id: data.id,
-          title: data.title,
-          completed: data.completed,
-          priority: data.priority as 'high' | 'normal',
-          userId: data.user_id,
-          createdAt: data.created_at
-        }, ...prev]);
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert(taskData)
+        .select('id, title, completed, priority, user_id, created_at')
+        .single();
+
+      if (error) {
+        throw error;
       }
+
+      setTasks((currentTasks) => {
+        const nextTasks = [
+          {
+            id: data.id,
+            title: data.title,
+            completed: data.completed,
+            priority: data.priority,
+            userId: data.user_id,
+            createdAt: data.created_at,
+          } as Task,
+          ...currentTasks,
+        ];
+
+        nextTasks.sort((a, b) => {
+          if (a.priority === 'high' && b.priority !== 'high') return -1;
+          if (a.priority !== 'high' && b.priority === 'high') return 1;
+          return 0;
+        });
+
+        return nextTasks;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
     }
@@ -125,8 +166,12 @@ export function TaskLog() {
         .delete()
         .eq('id', id)
         .eq('user_id', userId);
-      if (error) throw error;
-      setTasks(prev => prev.filter(task => task.id !== id));
+
+      if (error) {
+        throw error;
+      }
+
+      setTasks((currentTasks) => currentTasks.filter((task) => task.id !== id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
     }

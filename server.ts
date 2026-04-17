@@ -2,18 +2,22 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { GoogleGenAI } from "@google/genai";
+import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
-import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 const supabaseAdmin =
   supabaseUrl && supabaseServiceRoleKey
     ? createClient(supabaseUrl, supabaseServiceRoleKey, {
-        auth: { autoRefreshToken: false, persistSession: false }
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
       })
     : null;
 
@@ -34,13 +38,13 @@ const requireAuth = async (req: express.Request, res: express.Response, next: ex
   const token = authHeader.split('Bearer ')[1];
   try {
     if (!supabaseAdmin) {
-      console.error("Supabase admin client not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+      console.error("Supabase auth verification is not configured.");
       return res.status(500).json({ error: "Internal server error: Auth misconfiguration" });
     }
 
     const { data, error } = await supabaseAdmin.auth.getUser(token);
     if (error || !data.user) {
-      console.error("Supabase auth error:", error);
+      console.error("Auth error:", error);
       return res.status(401).json({ error: "Unauthorized: Invalid token" });
     }
 

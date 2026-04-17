@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Terminal, Image as ImageIcon, Search, MapPin, Brain, Zap, Video, Mic, Volume2, X, Cpu, Shield, Trash2 } from 'lucide-react';
 
-import { auth, fetchProtectedJson, getClientSafeMessage, handleFirestoreError, OperationType, supabase } from '../firebase';
+import { auth, fetchProtectedJson, getClientSafeMessage, handleFirestoreError, OperationType } from '../firebase';
 import { Persona, useNeuralAuth, useNeuralSystem, useNeuralUi } from '../context/NeuralContext';
+import { supabase } from '../lib/supabase';
 
 interface Message {
   id?: string;
@@ -12,6 +13,16 @@ interface Message {
   videoUrl?: string;
   audioData?: string;
   createdAt?: any;
+}
+
+interface MessageRow {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  image_url: string | null;
+  video_url: string | null;
+  audio_data: string | null;
+  created_at: string;
 }
 
 type ChatMode = 'standard' | 'search' | 'maps' | 'think' | 'fast' | 'vision' | 'image' | 'video' | 'tts';
@@ -96,7 +107,7 @@ export function ChatInterface() {
   const [videoAspectRatio, setVideoAspectRatio] = useState<VideoAspectRatio>('16:9');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
-  const userId = user?.uid;
+  const userId = user?.id;
   const requestVersionRef = useRef(0);
 
   useEffect(() => {
@@ -116,13 +127,26 @@ export function ChatInterface() {
 
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
+  const mapMessageRow = (message: MessageRow): Message => ({
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    imageUrl: message.image_url ?? undefined,
+    videoUrl: message.video_url ?? undefined,
+    audioData: message.audio_data ?? undefined,
+    createdAt: message.created_at,
+  });
+
   useEffect(() => {
+    let isMounted = true;
+
     if (!userId) {
       setMessages([{ role: 'assistant', content: DEFAULT_GREETING }]);
       return;
     }
 
     const loadMessages = async () => {
+      const path = 'messages';
       try {
         const { data, error } = await supabase
           .from('messages')
@@ -130,29 +154,34 @@ export function ChatInterface() {
           .eq('user_id', userId)
           .order('created_at', { ascending: true });
 
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
 
-        const loadedMessages = (data ?? []).map((row) => ({
-          id: row.id,
-          role: row.role as 'user' | 'assistant',
-          content: row.content,
-          imageUrl: row.image_url ?? undefined,
-          videoUrl: row.video_url ?? undefined,
-          audioData: row.audio_data ?? undefined,
-          createdAt: row.created_at
-        } as Message));
+        const loadedMessages = (data as MessageRow[] | null)?.map(mapMessageRow) ?? [];
+        if (!isMounted) return;
 
-        setMessages(loadedMessages.length === 0 ? [{ role: 'assistant', content: DEFAULT_GREETING }] : loadedMessages);
+        if (loadedMessages.length === 0) {
+          setMessages([{ role: 'assistant', content: DEFAULT_GREETING }]);
+        } else {
+          setMessages(loadedMessages);
+        }
       } catch (error) {
         try {
-          handleFirestoreError(error, OperationType.LIST, `messages:user_id=${userId}`);
+          handleFirestoreError(error, OperationType.LIST, path);
         } catch (handledError) {
-          setMessages([{ role: 'assistant', content: `${HISTORY_SYNC_MESSAGE} ${getClientSafeMessage(handledError)}` }]);
+          if (isMounted) {
+            setMessages([{ role: 'assistant', content: `${HISTORY_SYNC_MESSAGE} ${getClientSafeMessage(handledError)}` }]);
+          }
         }
       }
     };
 
     void loadMessages();
+
+    return () => {
+      isMounted = false;
+    };
   }, [userId]);
 
   useEffect(() => {
@@ -221,11 +250,11 @@ export function ChatInterface() {
         throw new Error('Generated media could not be downloaded.');
       }
       return await response.blob();
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
+    } catch (handledError) {
+      if (handledError instanceof DOMException && handledError.name === 'AbortError') {
         throw new Error('Generated media download timed out. Please try again.');
       }
-      throw error;
+      throw handledError;
     } finally {
       window.clearTimeout(timeoutId);
     }
@@ -332,9 +361,13 @@ export function ChatInterface() {
         content: msg.content,
         image_url: msg.imageUrl ?? null,
         video_url: msg.videoUrl ?? null,
-        audio_data: msg.audioData ?? null
+        audio_data: msg.audioData ?? null,
       });
-      if (error) throw error;
+
+      if (error) {
+        throw error;
+      }
+
       return true;
     } catch (error) {
       try {
@@ -360,20 +393,27 @@ export function ChatInterface() {
     setMessages([{ role: 'assistant', content: 'Memory wiped. Systems rebooted.' }]);
 
     try {
+      const path = 'messages';
       const { error: deleteError } = await supabase
         .from('messages')
         .delete()
         .eq('user_id', userId);
-      if (deleteError) throw deleteError;
+
+      if (deleteError) {
+        throw deleteError;
+      }
 
       const newId = Date.now().toString();
       const { error: insertError } = await supabase.from('messages').insert({
         id: newId,
         user_id: userId,
         role: 'assistant',
-        content: 'Memory wiped. Systems rebooted.'
+        content: 'Memory wiped. Systems rebooted.',
       });
-      if (insertError) throw insertError;
+
+      if (insertError) {
+        throw insertError;
+      }
     } catch (error) {
       setMessages([...previousMessages, {
         role: 'assistant',
@@ -564,6 +604,7 @@ export function ChatInterface() {
         videoUrl: generatedVideoUrl
       };
 
+      setMessages(prev => [...prev, newAssistantMsg]);
       await saveMessage(newAssistantMsg);
 
       if (mode === 'tts') {

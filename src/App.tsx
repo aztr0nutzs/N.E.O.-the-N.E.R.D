@@ -171,7 +171,7 @@ function AppContent() {
     } else if (transcript.includes('close radar') || transcript.includes('hide optics')) {
       setActiveWindows(prev => ({ ...prev, radar: false }));
     } else if (transcript.includes('close all windows')) {
-      setActiveWindows({ tasks: false, sensors: false, terminal: false, radar: false, diagnostics: false });
+      setActiveWindows({ tasks: false, sensors: false, terminal: false, radar: false, diagnostics: false, settings: false });
     }
   }, [lastTranscript]);
 
@@ -503,7 +503,7 @@ function AppContent() {
                   <DiagnosticItem 
                     label="Supabase Sync" 
                     status={user ? 'online' : 'offline'} 
-                    details="Real-time data persistence and authentication."
+                    details="Secure cloud persistence and authentication."
                   />
                   <div className="mt-auto pt-4 border-t border-gray-800 flex justify-between items-center">
                     <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">
