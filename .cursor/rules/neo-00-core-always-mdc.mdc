@@ -1,0 +1,21 @@
+---
+description: >-
+  N.E.O. the N.E.R.D — core mission, UI freeze, Robot2D/3D, verification honesty
+  (always apply in this repo)
+alwaysApply: true
+---
+# N.E.O. the N.E.R.D — core contract
+## Authority
+- Root app: follow repo root `AGENTS.md` first; then `README.md` and `docs/` for Supabase architecture.
+- Anything under `android/`: follow `android/AGENTS.md` and `android/docs/` before generic advice.
+## Project agent skills
+- Reusable workflows live in **`.cursor/skills/<skill-name>/SKILL.md`** (see `AGENTS.md` for the table). Read the matching skill **before** deep edits when the task touches Supabase migration, verification gates, HUD preservation, or `server.ts` hardening.
+## Product identity
+- **Live center robot:** `Robot2D` only. **Do not re-enable or wire `Robot3D` into the live path** unless the task explicitly authorizes it and names the branch/scope.
+- **UI:** Do not redesign, recompose, or "dashboard-ify" the HUD. Preserve frames, glow, scanlines, panel placement, and cyber/industrial density unless the task explicitly allows a named exception.
+## Backend stance
+- Finish **one** working backend. Prefer **Supabase** (Auth + Postgres `tasks` / `messages` + RLS) per root `AGENTS.md` and `docs/TARGET_SUPABASE_ARCHITECTURE.md`.
+- Remove Firebase **only after** Supabase replacements exist and are verified. No long-lived parallel auth/data paths.
+## Honesty and receipts
+- Never claim build/lint success without **actually running** the project commands and pasting outcomes.
+- End non-trivial work with: files touched, why, commands run, result, and explicit **"protected UI preserved: yes/no"**.
