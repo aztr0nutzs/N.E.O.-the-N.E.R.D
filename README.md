@@ -21,3 +21,7 @@ This project now uses Supabase for authentication and data storage, with server-
    `APP_URL`
 4. Start the app:
    `npm run dev`
+
+## Supabase Branch setup (preview environments)
+
+If Supabase reports that a Git branch is not associated with any Supabase Branch, create that Supabase Branch from the Supabase dashboard Git integration for this repository branch before running preview checks.
