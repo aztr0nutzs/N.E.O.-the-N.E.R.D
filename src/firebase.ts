@@ -86,15 +86,29 @@ export async function initializeMobileAuth(onAuthError: (message: string | null)
     return () => {};
   }
 
+  const handledCallbackUrls = new Set<string>();
+
   const processCallbackUrl = async (url: string) => {
     if (!isAuthCallbackUrl(url)) {
       return;
     }
 
+    if (handledCallbackUrls.has(url)) {
+      return;
+    }
+
+    handledCallbackUrls.add(url);
+
     try {
       await restoreSessionFromUrl(url);
       onAuthError(null);
-      await Browser.close();
+
+      try {
+        await Browser.close();
+      } catch {
+        // Browser close can fail after a successful deep-link return on some devices.
+        // This is non-fatal and should not surface as an auth error.
+      }
     } catch (error) {
       if (import.meta.env.DEV) {
         console.error('Mobile auth callback failed:', error);
@@ -247,10 +261,14 @@ function fallbackMessageForStatus(status: number) {
 function isAuthCallbackUrl(url: string) {
   try {
     const parsedUrl = new URL(url);
+    const callbackPath = parsedUrl.pathname.endsWith('/')
+      ? parsedUrl.pathname.slice(0, -1)
+      : parsedUrl.pathname;
+
     return (
-      parsedUrl.protocol === `${AUTH_CALLBACK_SCHEME}:` &&
-      parsedUrl.host === AUTH_CALLBACK_HOST &&
-      parsedUrl.pathname === AUTH_CALLBACK_PATH
+      parsedUrl.protocol.toLowerCase() === `${AUTH_CALLBACK_SCHEME}:` &&
+      parsedUrl.host.toLowerCase() === AUTH_CALLBACK_HOST &&
+      callbackPath === AUTH_CALLBACK_PATH
     );
   } catch {
     return false;
@@ -261,7 +279,7 @@ async function restoreSessionFromUrl(url: string) {
   const params = extractAuthParams(url);
   const callbackError = params.get('error_description') ?? params.get('error') ?? params.get('error_code');
   if (callbackError) {
-    throw new ClientSafeError(decodeURIComponent(callbackError));
+    throw new ClientSafeError(safeDecodeUriComponent(callbackError));
   }
 
   const accessToken = params.get('access_token');
@@ -289,6 +307,14 @@ async function restoreSessionFromUrl(url: string) {
   }
 
   throw new ClientSafeError(OAUTH_CALLBACK_ERROR_MESSAGE);
+}
+
+function safeDecodeUriComponent(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function extractAuthParams(url: string) {
