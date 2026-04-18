@@ -97,10 +97,19 @@ export function NeuralProvider({ children }: { children: ReactNode }) {
 
     void (async () => {
       try {
-        removeMobileAuthListener = await initializeMobileAuth((message) => {
-          if (!isMounted) return;
-          setAuthError(message);
-        });
+        try {
+          removeMobileAuthListener = await initializeMobileAuth((message) => {
+            if (!isMounted) return;
+            setAuthError(message);
+          });
+        } catch (error) {
+          if (import.meta.env.DEV) {
+            console.error('Mobile auth listener setup failed:', error);
+          }
+          if (isMounted) {
+            setAuthError(getClientSafeMessage(error, 'Mobile sign-in bridge failed to start. Please relaunch and try again.'));
+          }
+        }
 
         const { data, error } = await supabase.auth.getSession();
         if (!isMounted) return;
