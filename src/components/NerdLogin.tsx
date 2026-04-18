@@ -220,12 +220,12 @@ export function NerdLogin({ onLogin, isAuthenticating, authError }: NerdLoginPro
               {isAuthenticating ? 'Opening Google...' : 'Sign In With Google'}
             </button>
 
-            <button
-              disabled
-              className="w-full cursor-not-allowed rounded-[14px] border-2 border-neon-green/80 bg-black/35 px-4 py-4 text-[11px] font-bold uppercase tracking-[0.22em] text-neon-green opacity-65 shadow-[0_0_18px_rgba(61,220,132,0.2),inset_0_0_18px_rgba(61,220,132,0.06)] [font-family:'Orbitron',monospace]"
+            <div
+              aria-live="polite"
+              className="w-full rounded-[14px] border-2 border-neon-green/80 bg-black/35 px-4 py-4 text-[11px] font-bold uppercase tracking-[0.22em] text-neon-green opacity-65 shadow-[0_0_18px_rgba(61,220,132,0.2),inset_0_0_18px_rgba(61,220,132,0.06)] [font-family:'Orbitron',monospace]"
             >
               Neural Link Unlocks After Sign-In
-            </button>
+            </div>
 
             {authError && (
               <div className="mt-5 w-full rounded-[10px] border border-red-500/70 bg-red-500/18 px-4 py-3 text-left backdrop-blur-sm">
