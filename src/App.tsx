@@ -4,10 +4,11 @@ import { Panel } from './components/Panel';
 import { SidePanelLeft } from './components/SidePanelLeft';
 import { SidePanelRight } from './components/SidePanelRight';
 import { BottomDock } from './components/BottomDock';
+import { NerdLogin } from './components/NerdLogin';
 import { NerdLogo } from './components/NerdLogo';
 import { Power, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { consumeAuthRedirectError, getClientSafeMessage, initializeAuthRedirectHandling, isOAuthConsentPath, loginWithGoogle, logout, normalizeOAuthConsentPath } from './firebase';
+import { getClientSafeMessage, loginWithGoogle, logout } from './firebase';
 import { NeuralProvider, useNeuralAuth, useNeuralRealtime, useNeuralSystem } from './context/NeuralContext';
 
 const Robot2D = lazy(() => import('./components/Robot2D').then(module => ({ default: module.Robot2D })));
@@ -138,8 +139,9 @@ export default function App() {
 
 function AppContent() {
   const { isSystemsReady, startSystems, lastTranscript } = useNeuralSystem();
-  const { user, authLoading } = useNeuralAuth();
+  const { user, authLoading, authError, setAuthError } = useNeuralAuth();
   const [showNetworkScreen, setShowNetworkScreen] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [activeWindows, setActiveWindows] = useState({
     tasks: false,
     sensors: false,
@@ -202,39 +204,6 @@ function AppContent() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionProgress, setConnectionProgress] = useState(0);
   const [connectionStep, setConnectionStep] = useState('');
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [isAuthLaunching, setIsAuthLaunching] = useState(false);
-
-  useEffect(() => {
-    let cleanup: (() => void) | undefined;
-
-    void initializeAuthRedirectHandling().then((dispose) => {
-      cleanup = dispose;
-    });
-
-    return () => {
-      cleanup?.();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      if (isOAuthConsentPath()) {
-        normalizeOAuthConsentPath();
-      }
-      setAuthError(null);
-      setIsAuthLaunching(false);
-      return;
-    }
-
-    const redirectError = consumeAuthRedirectError();
-    if (redirectError) {
-      if (isOAuthConsentPath()) {
-        normalizeOAuthConsentPath();
-      }
-      setAuthError(redirectError);
-    }
-  }, [user]);
 
   const handleStartSystems = async () => {
     setIsConnecting(true);
@@ -264,13 +233,14 @@ function AppContent() {
 
   const handleLogin = async () => {
     setAuthError(null);
-    setIsAuthLaunching(true);
+    setIsAuthenticating(true);
 
     try {
       await loginWithGoogle();
     } catch (error) {
-      setIsAuthLaunching(false);
-      setAuthError(getClientSafeMessage(error, 'Google sign-in could not be started. Please try again.'));
+      setAuthError(getClientSafeMessage(error, 'Google sign-in could not start. Try again.'));
+    } finally {
+      setIsAuthenticating(false);
     }
   };
 
@@ -284,59 +254,11 @@ function AppContent() {
 
   if (!user) {
     return (
-      <div className="min-h-screen w-full bg-[#050505] flex items-center justify-center font-sans overflow-hidden">
-        <div className="relative w-full max-w-[430px] h-[100dvh] max-h-[932px] bg-[#0a0a0a] overflow-hidden shadow-2xl shadow-cyber-blue/10 border border-gray-900 flex flex-col items-center justify-center p-8">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,255,255,0.05)_0%,transparent_70%)] pointer-events-none" />
-          
-          <motion.div 
-            animate={{ scale: [1, 1.05, 1], opacity: [0.8, 1, 0.8] }}
-            transition={{ duration: 4, repeat: Infinity }}
-            className="w-32 h-32 mb-8 relative"
-          >
-            <div className="absolute inset-0 border-4 border-cyber-blue rounded-full border-t-transparent animate-spin" style={{ animationDuration: '3s' }} />
-            <div className="absolute inset-2 border-4 border-neon-green rounded-full border-b-transparent animate-spin" style={{ animationDuration: '2s', animationDirection: 'reverse' }} />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Shield className="w-10 h-10 text-cyber-blue" />
-            </div>
-          </motion.div>
-
-          <div className="font-black italic text-4xl tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-green-400 to-pink-500 drop-shadow-[0_0_10px_rgba(0,255,255,0.5)] mb-2" style={{ WebkitTextStroke: '1px rgba(255,255,255,0.5)' }}>
-             NERD
-          </div>
-          <div className="text-cyber-blue font-mono text-xs tracking-widest mb-12 text-center">
-            NEURAL ENVIRONMENT<br/>ROBOTIC DIRECTOR
-          </div>
-
-          <button 
-            onClick={handleLogin}
-            disabled={isAuthLaunching || isConnecting}
-            className="w-full py-4 bg-cyber-blue/10 border border-cyber-blue text-cyber-blue font-mono font-bold tracking-widest rounded hover:bg-cyber-blue hover:text-black transition-all shadow-[0_0_15px_rgba(0,255,255,0.3)] mb-4 disabled:opacity-50"
-          >
-            {isAuthLaunching ? 'OPENING GOOGLE...' : 'SIGN IN WITH GOOGLE'}
-          </button>
-
-          {authError && (
-            <div className="w-full mb-4 border border-red-500/40 bg-red-500/10 px-4 py-3 text-[10px] font-mono uppercase tracking-wide text-red-300">
-              {authError}
-            </div>
-          )}
-
-          {!isSystemsReady && (
-            <>
-              <button 
-                onClick={handleStartSystems}
-                disabled={isConnecting || isAuthLaunching}
-                className="w-full py-4 bg-neon-green/10 border border-neon-green text-neon-green font-mono font-bold tracking-widest rounded hover:bg-neon-green hover:text-black transition-all shadow-[0_0_15px_rgba(57,255,20,0.3)] disabled:opacity-50"
-              >
-                {isConnecting ? 'STARTING...' : 'START LOCAL SYSTEMS'}
-              </button>
-              <div className="mt-3 text-center text-[10px] font-mono uppercase tracking-wide text-gray-500">
-                Local startup only. Does not sign you in.
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+      <NerdLogin
+        onLogin={handleLogin}
+        isAuthenticating={isAuthenticating}
+        authError={authError}
+      />
     );
   }
 

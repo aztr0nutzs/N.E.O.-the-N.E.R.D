@@ -1,3 +1,5 @@
+import { App as CapacitorApp } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from './lib/supabase';
 
@@ -7,11 +9,12 @@ const RATE_LIMIT_MESSAGE = 'Main servers are rate-limiting requests. Please wait
 const SERVER_UNAVAILABLE_MESSAGE = 'Main servers are temporarily unavailable. Please try again shortly.';
 const NETWORK_ERROR_MESSAGE = 'Main servers are unreachable. Check your connection and try again.';
 const REQUEST_TIMEOUT_MESSAGE = 'Main servers timed out. Please try again.';
-const OAUTH_START_FAILURE_MESSAGE = 'Google sign-in could not be started. Please try again.';
-const OAUTH_REDIRECT_FAILURE_MESSAGE = 'Sign-in could not return to this app. Check the allowed Supabase redirect URL and try again.';
-const OAUTH_CONSENT_PATH = '/oauth/consent';
-const NATIVE_OAUTH_CALLBACK_URL = 'com.ai.assistant://auth/callback';
-const AUTH_REDIRECT_ERROR_STORAGE_KEY = 'neo.auth.redirect.error';
+const AUTH_CALLBACK_SCHEME = 'com.ai.assistant';
+const AUTH_CALLBACK_HOST = 'auth';
+const AUTH_CALLBACK_PATH = '/callback';
+const MOBILE_AUTH_REDIRECT_URL = `${AUTH_CALLBACK_SCHEME}://${AUTH_CALLBACK_HOST}${AUTH_CALLBACK_PATH}`;
+const OAUTH_START_ERROR_MESSAGE = 'Google sign-in could not start. Try again.';
+const OAUTH_CALLBACK_ERROR_MESSAGE = 'Google sign-in did not complete. Try again.';
 
 type AuthUser = Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'];
 
@@ -42,27 +45,29 @@ export class ClientSafeError extends Error {
 }
 
 export const loginWithGoogle = async () => {
-  const redirectTo = getOAuthRedirectUrl();
+  const redirectTo = Capacitor.isNativePlatform()
+    ? MOBILE_AUTH_REDIRECT_URL
+    : window.location.origin;
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo,
-      skipBrowserRedirect: true,
+      skipBrowserRedirect: Capacitor.isNativePlatform(),
     },
   });
 
   if (error) {
-    throw new ClientSafeError(getOAuthFailureMessage(error), error.status);
+    throw new ClientSafeError(OAUTH_START_ERROR_MESSAGE);
   }
 
-  const authUrl = data?.url;
-  if (!authUrl) {
-    throw new ClientSafeError(
-      'Google sign-in URL is missing. Check the Supabase Google provider and allowed redirect URLs.',
-    );
-  }
+  if (Capacitor.isNativePlatform()) {
+    if (!data?.url) {
+      throw new ClientSafeError(OAUTH_START_ERROR_MESSAGE);
+    }
 
-  window.location.assign(authUrl);
+    await Browser.open({ url: data.url });
+  }
 };
 
 export const logout = async () => {
@@ -76,174 +81,40 @@ export const logout = async () => {
   }
 };
 
-function getOAuthRedirectUrl() {
-  if (Capacitor.isNativePlatform()) {
-    return NATIVE_OAUTH_CALLBACK_URL;
-  }
-
-  return new URL(OAUTH_CONSENT_PATH, window.location.origin).toString();
-}
-
-export async function initializeAuthRedirectHandling() {
+export async function initializeMobileAuth(onAuthError: (message: string | null) => void) {
   if (!Capacitor.isNativePlatform()) {
-    return () => undefined;
+    return () => {};
   }
 
-  const { App } = await import('@capacitor/app');
-
-  const processAuthUrl = async (callbackUrl?: string) => {
-    if (!callbackUrl || !isNativeOAuthCallbackUrl(callbackUrl)) {
+  const processCallbackUrl = async (url: string) => {
+    if (!isAuthCallbackUrl(url)) {
       return;
     }
 
-    const errorMessage = await completeNativeOAuthRedirect(callbackUrl);
-    if (errorMessage) {
-      persistAuthRedirectError(errorMessage);
-    } else {
-      clearAuthRedirectError();
+    try {
+      await restoreSessionFromUrl(url);
+      onAuthError(null);
+      await Browser.close();
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Mobile auth callback failed:', error);
+      }
+      onAuthError(getClientSafeMessage(error, OAUTH_CALLBACK_ERROR_MESSAGE));
     }
   };
 
-  const launchUrl = await App.getLaunchUrl();
-  await processAuthUrl(launchUrl?.url);
-
-  const listener = await App.addListener('appUrlOpen', ({ url }) => {
-    void processAuthUrl(url);
+  const listener = await CapacitorApp.addListener('appUrlOpen', ({ url }) => {
+    void processCallbackUrl(url);
   });
+
+  const launchUrl = await CapacitorApp.getLaunchUrl();
+  if (launchUrl?.url) {
+    await processCallbackUrl(launchUrl.url);
+  }
 
   return () => {
     void listener.remove();
   };
-}
-
-function isNativeOAuthCallbackUrl(url: string) {
-  return url.startsWith(NATIVE_OAUTH_CALLBACK_URL);
-}
-
-async function completeNativeOAuthRedirect(callbackUrl: string) {
-  let url: URL;
-  try {
-    url = new URL(callbackUrl);
-  } catch {
-    return OAUTH_REDIRECT_FAILURE_MESSAGE;
-  }
-
-  const redirectError = getAuthRedirectErrorFromUrl(url);
-  if (redirectError) {
-    return redirectError;
-  }
-
-  const code = url.searchParams.get('code');
-  if (!code) {
-    return OAUTH_REDIRECT_FAILURE_MESSAGE;
-  }
-
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error) {
-    return getOAuthFailureMessage(error);
-  }
-
-  return null;
-}
-
-function getOAuthFailureMessage(error: unknown) {
-  if (!(error instanceof Error)) {
-    return OAUTH_START_FAILURE_MESSAGE;
-  }
-
-  const message = error.message.toLowerCase();
-  if (message.includes('redirect') || message.includes('callback')) {
-    return OAUTH_REDIRECT_FAILURE_MESSAGE;
-  }
-
-  return error.message || OAUTH_START_FAILURE_MESSAGE;
-}
-
-function clearAuthRedirectParams() {
-  const url = new URL(window.location.href);
-  const authKeys = ['error', 'error_code', 'error_description', 'error_description_code'];
-
-  authKeys.forEach((key) => {
-    url.searchParams.delete(key);
-  });
-
-  const hashValue = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash;
-  if (hashValue) {
-    const hashParams = new URLSearchParams(hashValue);
-    authKeys.forEach((key) => {
-      hashParams.delete(key);
-    });
-    const nextHash = hashParams.toString();
-    url.hash = nextHash ? `#${nextHash}` : '';
-  }
-
-  window.history.replaceState({}, document.title, url.toString());
-}
-
-function persistAuthRedirectError(message: string) {
-  window.sessionStorage.setItem(AUTH_REDIRECT_ERROR_STORAGE_KEY, message);
-}
-
-function clearAuthRedirectError() {
-  window.sessionStorage.removeItem(AUTH_REDIRECT_ERROR_STORAGE_KEY);
-}
-
-export function isOAuthConsentPath(pathname = window.location.pathname) {
-  return pathname === OAUTH_CONSENT_PATH;
-}
-
-export function normalizeOAuthConsentPath() {
-  if (!isOAuthConsentPath()) {
-    return;
-  }
-
-  const url = new URL(window.location.href);
-  url.pathname = '/';
-  url.search = '';
-  url.hash = '';
-  window.history.replaceState({}, document.title, url.toString());
-}
-
-export function consumeAuthRedirectError() {
-  const storedError = window.sessionStorage.getItem(AUTH_REDIRECT_ERROR_STORAGE_KEY);
-  if (storedError) {
-    clearAuthRedirectError();
-    return storedError;
-  }
-
-  return getAuthRedirectErrorFromUrl(new URL(window.location.href), true);
-}
-
-function getAuthRedirectErrorFromUrl(url: URL, clearAfterRead = false) {
-  const searchParams = new URLSearchParams(url.search);
-  const hashValue = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash;
-  const hashParams = new URLSearchParams(hashValue);
-  const params = hashParams.has('error') || hashParams.has('error_description') || hashParams.has('error_code')
-    ? hashParams
-    : searchParams;
-
-  const rawCode = params.get('error_code') ?? '';
-  const rawDescription = params.get('error_description') ?? '';
-  const rawError = params.get('error') ?? '';
-
-  if (!rawCode && !rawDescription && !rawError) {
-    return null;
-  }
-
-  if (clearAfterRead) {
-    clearAuthRedirectParams();
-  }
-
-  const combined = `${rawCode} ${rawError} ${rawDescription}`.toLowerCase();
-  if (combined.includes('access_denied')) {
-    return 'Google sign-in was canceled or denied.';
-  }
-
-  if (combined.includes('redirect') || combined.includes('callback')) {
-    return OAUTH_REDIRECT_FAILURE_MESSAGE;
-  }
-
-  return rawDescription || rawError || 'Google sign-in failed. Please try again.';
 }
 
 async function getCurrentSession(forceRefresh = false) {
@@ -371,6 +242,67 @@ function fallbackMessageForStatus(status: number) {
   }
 
   return SERVER_UNAVAILABLE_MESSAGE;
+}
+
+function isAuthCallbackUrl(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+    return (
+      parsedUrl.protocol === `${AUTH_CALLBACK_SCHEME}:` &&
+      parsedUrl.host === AUTH_CALLBACK_HOST &&
+      parsedUrl.pathname === AUTH_CALLBACK_PATH
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function restoreSessionFromUrl(url: string) {
+  const params = extractAuthParams(url);
+  const callbackError = params.get('error_description') ?? params.get('error') ?? params.get('error_code');
+  if (callbackError) {
+    throw new ClientSafeError(decodeURIComponent(callbackError));
+  }
+
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  if (accessToken && refreshToken) {
+    const { error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    if (error) {
+      throw new ClientSafeError(OAUTH_CALLBACK_ERROR_MESSAGE);
+    }
+
+    return;
+  }
+
+  const code = params.get('code');
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      throw new ClientSafeError(OAUTH_CALLBACK_ERROR_MESSAGE);
+    }
+    return;
+  }
+
+  throw new ClientSafeError(OAUTH_CALLBACK_ERROR_MESSAGE);
+}
+
+function extractAuthParams(url: string) {
+  const parsedUrl = new URL(url);
+  const params = new URLSearchParams(parsedUrl.search);
+  const hashParams = new URLSearchParams(parsedUrl.hash.startsWith('#') ? parsedUrl.hash.slice(1) : parsedUrl.hash);
+
+  hashParams.forEach((value, key) => {
+    if (!params.has(key)) {
+      params.set(key, value);
+    }
+  });
+
+  return params;
 }
 
 export enum OperationType {

@@ -5,7 +5,6 @@ description: >-
   cyber styling). Use for any TaskLog, ChatInterface, App.tsx, or styling work
   that could affect layout or theme.
 ---
-
 # UI preservation pass
 
 ## Invariants
@@ -25,4 +24,4 @@ description: >-
 
 ## Done when
 
-- Functional goal met AND explicit statement: **protected UI preserved** (yes/no + notes).
+- Functional goal met AND explicit statement: **protected UI preserved** (yes/no + notes)

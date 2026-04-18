@@ -1,6 +1,7 @@
 import React, { createContext, useContext, ReactNode, useState, useEffect, useMemo, useCallback } from 'react';
 import { User } from '@supabase/supabase-js';
 import { useNeuralSystems } from '../hooks/useNeuralSystems';
+import { getClientSafeMessage, initializeMobileAuth } from '../firebase';
 import { supabase } from '../lib/supabase';
 
 export type Persona = 'NEO' | 'FRIDAY' | 'EDITH' | 'ULTRON';
@@ -31,6 +32,8 @@ const defaultAISettings: AISettings = {
 interface NeuralContextType {
   user: User | null;
   authLoading: boolean;
+  authError: string | null;
+  setAuthError: (message: string | null) => void;
   audioData: Uint8Array;
   userPosition: { x: number; y: number };
   isSystemsReady: boolean;
@@ -46,7 +49,7 @@ interface NeuralContextType {
   updateAISettings: (settings: Partial<AISettings>) => void;
 }
 
-type NeuralAuthContextType = Pick<NeuralContextType, 'user' | 'authLoading'>;
+type NeuralAuthContextType = Pick<NeuralContextType, 'user' | 'authLoading' | 'authError' | 'setAuthError'>;
 type NeuralSystemsContextType = Pick<NeuralContextType, 'isSystemsReady' | 'isListening' | 'lastTranscript' | 'startSystems' | 'toggleListening'>;
 type NeuralRealtimeContextType = Pick<NeuralContextType, 'audioData' | 'userPosition'>;
 type NeuralUiContextType = Pick<NeuralContextType, 'neuralSurge' | 'setNeuralSurge' | 'currentModel' | 'setCurrentModel' | 'aiSettings' | 'updateAISettings'>;
@@ -61,6 +64,7 @@ export function NeuralProvider({ children }: { children: ReactNode }) {
   const [neuralSurge, setNeuralSurge] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [currentModel, setCurrentModel] = useState('gemini-3-flash-preview');
   
   const [aiSettings, setAiSettings] = useState<AISettings>(() => {
@@ -78,38 +82,57 @@ export function NeuralProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
-
-    void supabase.auth.getSession().then(({ data, error }) => {
-      if (!isMounted) return;
-      if (error) {
-        if (import.meta.env.DEV) {
-          console.error('Auth session bootstrap failed:', error);
-        }
-        setUser(null);
-      } else {
-        setUser(data.session?.user ?? null);
-      }
-      setAuthLoading(false);
-    });
+    let removeMobileAuthListener: (() => void) | undefined;
 
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return;
       setUser(session?.user ?? null);
+      if (session?.user) {
+        setAuthError(null);
+      }
       setAuthLoading(false);
     });
 
+    void (async () => {
+      try {
+        removeMobileAuthListener = await initializeMobileAuth((message) => {
+          if (!isMounted) return;
+          setAuthError(message);
+        });
+
+        const { data, error } = await supabase.auth.getSession();
+        if (!isMounted) return;
+        if (error) {
+          if (import.meta.env.DEV) {
+            console.error('Auth session bootstrap failed:', error);
+          }
+          setUser(null);
+          setAuthError(getClientSafeMessage(error, 'Sign-in session could not be restored.'));
+        } else {
+          setUser(data.session?.user ?? null);
+        }
+      } finally {
+        if (isMounted) {
+          setAuthLoading(false);
+        }
+      }
+    })();
+
     return () => {
       isMounted = false;
+      removeMobileAuthListener?.();
       subscription.unsubscribe();
     };
   }, []);
 
   const authValue = useMemo(() => ({
     user,
-    authLoading
-  }), [user, authLoading]);
+    authLoading,
+    authError,
+    setAuthError
+  }), [user, authLoading, authError]);
 
   const systemsValue = useMemo(() => ({
     isSystemsReady: systems.isSystemsReady,

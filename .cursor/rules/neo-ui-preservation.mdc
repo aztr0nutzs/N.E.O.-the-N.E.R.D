@@ -1,0 +1,20 @@
+---
+description: >-
+  N.E.O. HUD visual contract — Robot2D center, panels, cyber styling; smallest
+  diff for TaskLog, Chat, App, Robot2D, and global CSS.
+globs: >-
+  src/components/TaskLog.tsx,src/components/ChatInterface.tsx,src/components/Robot2D.tsx,src/App.tsx,src/index.css
+alwaysApply: false
+---
+
+# N.E.O. UI preservation
+
+Follow the full workflow in `.cursor/skills/neo-ui-preservation/SKILL.md`. Align with `AGENTS.md` (frozen HUD, no `Robot3D` on this branch).
+
+**Invariants:** `Robot2D` stays the live center; no shell redesign or generic card layout; preserve hierarchy and theme-driving class names unless a bug fix requires a targeted change.
+
+**Process:** Note what must not change before editing; keep the diff minimal; avoid new global layout frameworks.
+
+**Evidence:** If the change could alter visuals, call out the UI risk or recommend a before/after screenshot check.
+
+**Completion:** State **protected UI preserved** (yes/no) with brief notes.
