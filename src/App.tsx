@@ -138,7 +138,7 @@ export default function App() {
 }
 
 function AppContent() {
-  const { isSystemsReady, startSystems, lastTranscript } = useNeuralSystem();
+  const { isSystemsReady, startSystems, lastTranscript, systemsWarning, systemsError } = useNeuralSystem();
   const { user, authLoading, authError, setAuthError } = useNeuralAuth();
   const [showNetworkScreen, setShowNetworkScreen] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -278,6 +278,18 @@ function AppContent() {
                 <p className="text-gray-400 font-mono text-xs mb-8 leading-relaxed max-w-[280px]">
                   You are signed in. On-device camera, microphone, and motion tracking stay off until you arm them here. This is separate from authentication.
                 </p>
+                {systemsError && (
+                  <div className="mb-5 max-w-[320px] rounded border border-red-500/45 bg-red-500/10 px-4 py-3 text-left shadow-[0_0_16px_rgba(239,68,68,0.12)]">
+                    <div className="text-[10px] font-mono uppercase tracking-[0.24em] text-red-300 mb-1">Local Sensor Fault</div>
+                    <div className="text-[11px] font-mono text-red-100 leading-relaxed">{systemsError}</div>
+                  </div>
+                )}
+                {systemsWarning && !systemsError && (
+                  <div className="mb-5 max-w-[320px] rounded border border-cyber-blue/35 bg-cyber-blue/10 px-4 py-3 text-left shadow-[0_0_16px_rgba(0,255,255,0.1)]">
+                    <div className="text-[10px] font-mono uppercase tracking-[0.24em] text-cyber-blue mb-1">Limited Startup</div>
+                    <div className="text-[11px] font-mono text-cyan-50 leading-relaxed">{systemsWarning}</div>
+                  </div>
+                )}
                 <button 
                   onClick={handleStartSystems}
                   className="px-10 py-4 bg-cyber-blue/10 border border-cyber-blue text-cyber-blue font-mono font-bold tracking-widest rounded hover:bg-cyber-blue hover:text-black transition-all shadow-[0_0_20px_rgba(0,255,255,0.4)] relative overflow-hidden group"

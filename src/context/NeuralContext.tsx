@@ -39,6 +39,8 @@ interface NeuralContextType {
   isSystemsReady: boolean;
   isListening: boolean;
   lastTranscript: string;
+  systemsWarning: string | null;
+  systemsError: string | null;
   neuralSurge: boolean;
   setNeuralSurge: (active: boolean) => void;
   startSystems: () => Promise<void>;
@@ -50,7 +52,7 @@ interface NeuralContextType {
 }
 
 type NeuralAuthContextType = Pick<NeuralContextType, 'user' | 'authLoading' | 'authError' | 'setAuthError'>;
-type NeuralSystemsContextType = Pick<NeuralContextType, 'isSystemsReady' | 'isListening' | 'lastTranscript' | 'startSystems' | 'toggleListening'>;
+type NeuralSystemsContextType = Pick<NeuralContextType, 'isSystemsReady' | 'isListening' | 'lastTranscript' | 'systemsWarning' | 'systemsError' | 'startSystems' | 'toggleListening'>;
 type NeuralRealtimeContextType = Pick<NeuralContextType, 'audioData' | 'userPosition'>;
 type NeuralUiContextType = Pick<NeuralContextType, 'neuralSurge' | 'setNeuralSurge' | 'currentModel' | 'setCurrentModel' | 'aiSettings' | 'updateAISettings'>;
 
@@ -138,12 +140,16 @@ export function NeuralProvider({ children }: { children: ReactNode }) {
     isSystemsReady: systems.isSystemsReady,
     isListening: systems.isListening,
     lastTranscript: systems.lastTranscript,
+    systemsWarning: systems.systemsWarning,
+    systemsError: systems.systemsError,
     startSystems: systems.startSystems,
     toggleListening: systems.toggleListening
   }), [
     systems.isListening,
     systems.isSystemsReady,
     systems.lastTranscript,
+    systems.systemsError,
+    systems.systemsWarning,
     systems.startSystems,
     systems.toggleListening
   ]);

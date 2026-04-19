@@ -388,5 +388,13 @@ export function handleDatabaseAccessError(error: unknown, operationType: Operati
   if (baseMessage.includes('Missing or insufficient permissions')) {
     throw new Error(`Permission denied while trying to ${operationType} data at ${path || 'unknown path'}.`);
   }
+
+  const normalizedMessage = baseMessage.trim();
+  if (normalizedMessage) {
+    throw new Error(
+      `Database error during ${operationType} operation: ${normalizedMessage}`
+    );
+  }
+
   throw new Error(`Database error during ${operationType} operation. Please try again.`);
 }

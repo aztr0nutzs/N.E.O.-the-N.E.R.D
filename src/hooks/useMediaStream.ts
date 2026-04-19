@@ -10,55 +10,80 @@ export function useMediaStream() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const initMediaStream = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ 
-      audio: true, 
-      video: { 
-        width: { ideal: 160 }, 
-        height: { ideal: 120 },
-        frameRate: { ideal: 15 } 
-      } 
-    });
-    devLog("Media stream acquired.");
+    const preferredVideoConstraints = {
+      width: { ideal: 160 },
+      height: { ideal: 120 },
+      frameRate: { ideal: 15 }
+    };
 
-    // Audio Setup
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    audioContextRef.current = new AudioContextClass();
-    
-    if (audioContextRef.current.state === 'suspended') {
-      await audioContextRef.current.resume();
+    let stream: MediaStream;
+    let audioEnabled = true;
+
+    try {
+      stream = await requestUserMediaWithTimeout({
+        audio: true,
+        video: preferredVideoConstraints
+      });
+      devLog("Media stream acquired with audio and video.");
+    } catch (error) {
+      devLog("Audio+video capture unavailable, retrying with video only.", error);
+      stream = await requestUserMediaWithTimeout({
+        audio: false,
+        video: preferredVideoConstraints
+      });
+      audioEnabled = false;
+      devLog("Media stream acquired with video only.");
     }
 
-    const source = audioContextRef.current.createMediaStreamSource(stream);
-    analyzerRef.current = audioContextRef.current.createAnalyser();
-    analyzerRef.current.fftSize = 256;
-    source.connect(analyzerRef.current);
-    devLog("Audio analyzer connected.");
+    analyzerRef.current = null;
+    if (audioContextRef.current) {
+      await audioContextRef.current.close().catch(console.error);
+      audioContextRef.current = null;
+    }
 
-    // Vision Setup
+    if (audioEnabled) {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass();
+
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      analyzerRef.current = audioContextRef.current.createAnalyser();
+      analyzerRef.current.fftSize = 256;
+      source.connect(analyzerRef.current);
+      devLog("Audio analyzer connected.");
+    }
+
     const video = document.createElement('video');
     video.setAttribute('playsinline', '');
     video.setAttribute('muted', '');
     video.muted = true;
     video.srcObject = stream;
-    
-    // Wait for video to be ready with a timeout
+
     await Promise.race([
-      new Promise((resolve) => {
+      new Promise((resolve, reject) => {
         if (video.readyState >= 2) {
-          video.play().then(resolve);
+          video.play().then(resolve).catch(reject);
         } else {
           video.onloadedmetadata = () => {
-            video.play().then(resolve);
+            video.play().then(resolve).catch(reject);
           };
         }
       }),
       new Promise((_, reject) => setTimeout(() => reject(new Error("Video initialization timeout")), 5000))
     ]);
-    
+
     videoRef.current = video;
     devLog("Video stream active.");
 
-    return { analyzer: analyzerRef.current, video: videoRef.current, audioContext: audioContextRef.current };
+    return {
+      analyzer: analyzerRef.current,
+      video: videoRef.current,
+      audioContext: audioContextRef.current,
+      audioEnabled
+    };
   }, []);
 
   const cleanupMediaStream = useCallback(() => {
@@ -72,4 +97,13 @@ export function useMediaStream() {
   }, []);
 
   return { initMediaStream, cleanupMediaStream, analyzerRef, videoRef, audioContextRef };
+}
+
+async function requestUserMediaWithTimeout(constraints: MediaStreamConstraints, timeoutMs = 4000) {
+  return await Promise.race([
+    navigator.mediaDevices.getUserMedia(constraints),
+    new Promise<MediaStream>((_, reject) => {
+      window.setTimeout(() => reject(new Error('Media permission request timed out.')), timeoutMs);
+    })
+  ]);
 }
