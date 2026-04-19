@@ -56,3 +56,23 @@ Branch: cursor/wire-dock-controls-ac63
 ### Notes
 - Scope expanded beyond BottomDock.tsx into adjacent control-truthfulness surfaces
 - Acceptable because changes remained tied to shell honesty and misleading controls
+
+## Task — Real settings access & HUD preferences
+Date: 2026-04-19
+Owner Agent: Codex / Composer
+Branch: cursor/real-settings-hud-c601
+
+### Files changed
+- src/context/NeuralContext.tsx
+- src/components/SettingsPanel.tsx
+- src/App.tsx
+- src/index.css
+
+### Summary
+- Extended settings panel with truthful persistence banner, HUD motion intensity, optional CRT shell overlay, OS reduced-motion respect, and real Gemini voice preview via protected TTS when signed in.
+- Honest “not available” section for notifications, thermal governor, and network tool defaults.
+
+### Verified outcomes
+- Settings still opened from right panel; panel title “Operator Settings”.
+- `neoHudSettings` + existing `aiSettings` persist to localStorage.
+- npm ci / lint / build passed

@@ -9,7 +9,7 @@ import { NerdLogo } from './components/NerdLogo';
 import { Power, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getClientSafeMessage, loginWithGoogle, logout } from './authClient';
-import { NeuralProvider, useNeuralAuth, useNeuralRealtime, useNeuralSystem } from './context/NeuralContext';
+import { NeuralProvider, useNeuralAuth, useNeuralRealtime, useNeuralSystem, useNeuralUi } from './context/NeuralContext';
 
 const Robot2D = lazy(() => import('./components/Robot2D').then(module => ({ default: module.Robot2D })));
 const ChatInterface = lazy(() => import('./components/ChatInterface').then(module => ({ default: module.ChatInterface })));
@@ -32,7 +32,7 @@ function DiagnosticItem({ label, status, details }: { label: string, status: 'on
   );
 }
 
-function Hotspot({ top, left, onClick, label, color = 'blue' }: { top: string, left: string, onClick: () => void, label: string, color?: 'blue' | 'green' | 'orange' | 'magenta' }) {
+function Hotspot({ top, left, onClick, label, color = 'blue', motionScale = 1 }: { top: string, left: string, onClick: () => void, label: string, color?: 'blue' | 'green' | 'orange' | 'magenta', motionScale?: number }) {
   const colorClasses = {
     blue: 'bg-cyber-blue shadow-[0_0_15px_rgba(0,255,255,0.8)]',
     green: 'bg-neon-green shadow-[0_0_15px_rgba(57,255,20,0.8)]',
@@ -54,23 +54,27 @@ function Hotspot({ top, left, onClick, label, color = 'blue' }: { top: string, l
     magenta: 'text-fuchsia-500',
   };
 
+  const m = Math.min(1, Math.max(0, motionScale));
+  const motionOn = m > 0.04;
+  const dur = (base: number) => base / (0.2 + 0.8 * Math.max(m, 0.05));
+
   return (
     <div className="absolute group cursor-pointer z-20" style={{ top, left, transform: 'translate(-50%, -50%)' }} onClick={onClick}>
       <div className="relative flex items-center justify-center">
         <motion.div 
           className={`absolute w-10 h-10 rounded-full border-2 border-dashed ${borderClasses[color]} opacity-60`}
-          animate={{ rotate: 360, scale: [1, 1.14, 1], opacity: [0.28, 0.7, 0.28] }}
-          transition={{ duration: 4.6, repeat: Infinity, ease: "linear" }}
+          animate={motionOn ? { rotate: 360, scale: [1, 1.14, 1], opacity: [0.28, 0.7, 0.28] } : { rotate: 0, scale: 1, opacity: 0.45 }}
+          transition={motionOn ? { duration: dur(4.6), repeat: Infinity, ease: "linear" } : { duration: 0 }}
         />
         <motion.div
           className={`absolute w-6 h-6 rounded-full border ${borderClasses[color]} opacity-35`}
-          animate={{ scale: [0.9, 1.55, 1.55], opacity: [0, 0.45, 0] }}
-          transition={{ duration: 2.8, repeat: Infinity, ease: 'easeOut' }}
+          animate={motionOn ? { scale: [0.9, 1.55, 1.55], opacity: [0, 0.45, 0] } : { scale: 1, opacity: 0.22 }}
+          transition={motionOn ? { duration: dur(2.8), repeat: Infinity, ease: 'easeOut' } : { duration: 0 }}
         />
         <motion.div
           className={`w-3 h-3 rounded-full ${colorClasses[color]}`}
-          animate={{ scale: [1, 1.18, 1], opacity: [0.88, 1, 0.88] }}
-          transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+          animate={motionOn ? { scale: [1, 1.18, 1], opacity: [0.88, 1, 0.88] } : { scale: 1, opacity: 0.95 }}
+          transition={motionOn ? { duration: dur(1.6), repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }}
         />
         <div className={`absolute w-1.5 h-1.5 rounded-full bg-white/80 ${color === 'blue' ? 'shadow-[0_0_10px_rgba(255,255,255,0.65)]' : color === 'green' ? 'shadow-[0_0_10px_rgba(255,255,255,0.6)]' : color === 'orange' ? 'shadow-[0_0_10px_rgba(255,255,255,0.58)]' : 'shadow-[0_0_10px_rgba(255,255,255,0.6)]'}`} />
          
@@ -86,14 +90,23 @@ function Hotspot({ top, left, onClick, label, color = 'blue' }: { top: string, l
   );
 }
 
-const WindowWrapper = React.forwardRef<HTMLDivElement, { children: React.ReactNode, position: string } & React.ComponentProps<typeof motion.div>>(({ children, position, ...props }, ref) => {
+const WindowWrapper = React.forwardRef<
+  HTMLDivElement,
+  { children: React.ReactNode; position: string; hudMotionScale?: number } & React.ComponentProps<typeof motion.div>
+>(({ children, position, hudMotionScale = 1, ...props }, ref) => {
+  const m = Math.min(1, Math.max(0, hudMotionScale));
+  const soft = m < 0.05;
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, scale: 0.94, y: 8, filter: 'blur(12px)' }}
+      initial={soft ? false : { opacity: 0, scale: 0.94, y: 8, filter: 'blur(12px)' }}
       animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
-      exit={{ opacity: 0, scale: 0.96, y: 4, filter: 'blur(10px)' }}
-      transition={{ type: 'spring', damping: 26, stiffness: 260, mass: 0.9 }}
+      exit={soft ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 4, filter: 'blur(10px)' }}
+      transition={
+        soft
+          ? { duration: 0.14, ease: 'easeOut' }
+          : { type: 'spring', damping: 26 + (1 - m) * 14, stiffness: 200 + m * 120, mass: 0.9 }
+      }
       className={`absolute z-30 ${position}`}
       {...props}
     >
@@ -105,15 +118,29 @@ WindowWrapper.displayName = 'WindowWrapper';
 
 function NeuralAura() {
   const { audioData } = useNeuralRealtime();
+  const { effectiveHudMotionScale } = useNeuralUi();
+  const m = Math.min(1, Math.max(0, effectiveHudMotionScale));
+  const spreadLo = 20 + (audioData[0] || 0) / 2;
+  const spreadHi = 50 + (audioData[0] || 0);
 
+  if (m < 0.05) {
+    return (
+      <div
+        className="absolute inset-0 pointer-events-none z-0"
+        style={{ boxShadow: `inset 0 0 ${spreadLo}px rgba(0,255,255,0.04)` }}
+      />
+    );
+  }
+
+  const amp = 0.04 + m * 0.06;
   return (
     <motion.div 
       className="absolute inset-0 pointer-events-none z-0"
       animate={{ 
         boxShadow: [
-          `inset 0 0 ${20 + (audioData[0] || 0) / 2}px rgba(0,255,255,0.05)`,
-          `inset 0 0 ${50 + (audioData[0] || 0)}px rgba(0,255,255,0.1)`,
-          `inset 0 0 ${20 + (audioData[0] || 0) / 2}px rgba(0,255,255,0.05)`
+          `inset 0 0 ${spreadLo}px rgba(0,255,255,${amp * 0.9})`,
+          `inset 0 0 ${spreadHi}px rgba(0,255,255,${amp * 1.8})`,
+          `inset 0 0 ${spreadLo}px rgba(0,255,255,${amp * 0.9})`
         ]
       }}
       transition={{ duration: 0.1, ease: "linear" }}
@@ -141,6 +168,7 @@ function AppContent() {
   const { isSystemsReady, startSystems, lastTranscript, systemsWarning, systemsError } = useNeuralSystem();
   const { audioData, userPosition } = useNeuralRealtime();
   const { user, authLoading, authError, setAuthError } = useNeuralAuth();
+  const { effectiveHudMotionScale, hudSettings } = useNeuralUi();
   const [showNetworkScreen, setShowNetworkScreen] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [chatMinimized, setChatMinimized] = useState(true);
@@ -188,6 +216,13 @@ function AppContent() {
   const toggleWindow = (key: keyof typeof activeWindows) => {
     setActiveWindows(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.neoHudMotion = String(Math.round(effectiveHudMotionScale * 1000) / 1000);
+    root.dataset.neoHudCrt = String(hudSettings.shellCrtOverlay);
+    root.style.setProperty('--neo-crt-opacity', String(hudSettings.crtOverlayOpacity));
+  }, [effectiveHudMotionScale, hudSettings.shellCrtOverlay, hudSettings.crtOverlayOpacity]);
 
   const environmentalTelemetry = useMemo(() => {
     const motionMag = Math.hypot(userPosition.x, userPosition.y);
@@ -266,6 +301,11 @@ function AppContent() {
     <div className="min-h-screen w-full bg-[#050505] flex items-center justify-center font-sans overflow-hidden">
       {/* Portrait Container */}
       <div className="relative w-full max-w-[430px] h-[100dvh] max-h-[932px] bg-[#0a0a0a] overflow-hidden shadow-2xl shadow-cyber-blue/10 border border-gray-900">
+        {/* Optional CRT-style overlay (decorative; intensity from Settings → neoHudSettings). */}
+        <div
+          className="neo-hud-crt-overlay absolute inset-0 pointer-events-none z-[5]"
+          aria-hidden
+        />
         
         {/* Background texture/gradient */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,255,255,0.05)_0%,transparent_70%)] pointer-events-none" />
@@ -369,11 +409,11 @@ function AppContent() {
           <div className="absolute inset-0 pointer-events-none">
             <div className="pointer-events-auto absolute inset-0">
               {/* Optics: Head/Eyes area */}
-              <Hotspot top="25%" left="50%" label="Optics" color="magenta" onClick={() => toggleWindow('radar')} />
+              <Hotspot top="25%" left="50%" label="Optics" color="magenta" motionScale={effectiveHudMotionScale} onClick={() => toggleWindow('radar')} />
               {/* Core: Chest area */}
-              <Hotspot top="55%" left="50%" label="Core" color="green" onClick={() => toggleWindow('sensors')} />
+              <Hotspot top="55%" left="50%" label="Core" color="green" motionScale={effectiveHudMotionScale} onClick={() => toggleWindow('sensors')} />
               {/* Arm: Hand area */}
-              <Hotspot top="75%" left="25%" label="Arm" color="blue" onClick={() => toggleWindow('tasks')} />
+              <Hotspot top="75%" left="25%" label="Arm" color="blue" motionScale={effectiveHudMotionScale} onClick={() => toggleWindow('tasks')} />
             </div>
           </div>
         </div>
@@ -419,7 +459,7 @@ function AppContent() {
         {/* Floating Windows */}
         <AnimatePresence>
           {activeWindows.tasks && (
-            <WindowWrapper key="tasks" position="top-1/4 left-1/2 -translate-x-1/2 w-[90%] h-[50%] z-50">
+            <WindowWrapper key="tasks" hudMotionScale={effectiveHudMotionScale} position="top-1/4 left-1/2 -translate-x-1/2 w-[90%] h-[50%] z-50">
               <Panel title="Mission Logs" accentColor="orange" onClose={() => toggleWindow('tasks')} className="h-full">
                 <Suspense fallback={<PanelLoadingFallback />}>
                   <TaskLog />
@@ -429,7 +469,7 @@ function AppContent() {
           )}
 
           {activeWindows.sensors && (
-            <WindowWrapper key="sensors" position="top-1/4 left-1/2 -translate-x-1/2 w-[90%] z-50">
+            <WindowWrapper key="sensors" hudMotionScale={effectiveHudMotionScale} position="top-1/4 left-1/2 -translate-x-1/2 w-[90%] z-50">
               <Panel title="Environmental" accentColor="blue" onClose={() => toggleWindow('sensors')}>
                 <p className="text-[9px] font-mono text-gray-500 mb-3 leading-relaxed">
                   Live fields below come from the armed local pipeline (camera motion + mic spectrum). No outdoor weather or radiation hardware is connected.
@@ -468,7 +508,7 @@ function AppContent() {
           )}
 
           {activeWindows.terminal && (
-            <WindowWrapper key="terminal" position="top-1/3 left-1/2 -translate-x-1/2 w-[90%] z-50">
+            <WindowWrapper key="terminal" hudMotionScale={effectiveHudMotionScale} position="top-1/3 left-1/2 -translate-x-1/2 w-[90%] z-50">
               <Panel title="System Terminal" accentColor="green" onClose={() => toggleWindow('terminal')}>
                 <div className="bg-black/80 p-3 rounded border border-neon-green/30 font-mono text-[10px] text-neon-green h-48 overflow-y-auto custom-scrollbar shadow-[0_0_15px_rgba(57,255,20,0.1)_inset]">
                   {terminalLines.map((line, i) => (
@@ -481,7 +521,7 @@ function AppContent() {
           )}
 
           {activeWindows.radar && (
-            <WindowWrapper key="radar" position="top-1/4 left-1/2 -translate-x-1/2 w-[90%] aspect-square z-50">
+            <WindowWrapper key="radar" hudMotionScale={effectiveHudMotionScale} position="top-1/4 left-1/2 -translate-x-1/2 w-[90%] aspect-square z-50">
               <Panel title="Local Radar" accentColor="magenta" onClose={() => toggleWindow('radar')} className="h-full">
                 <div className="w-full h-full relative flex items-center justify-center bg-black/50 rounded-full border border-fuchsia-500/30 overflow-hidden shadow-[0_0_20px_rgba(255,0,255,0.1)_inset]">
                   {/* Radar Grid */}
@@ -503,7 +543,7 @@ function AppContent() {
           )}
 
           {activeWindows.diagnostics && (
-            <WindowWrapper key="diagnostics" position="top-[15%] left-1/2 -translate-x-1/2 w-[90%] h-[70%] z-50">
+            <WindowWrapper key="diagnostics" hudMotionScale={effectiveHudMotionScale} position="top-[15%] left-1/2 -translate-x-1/2 w-[90%] h-[70%] z-50">
               <Panel title="System Diagnostics" accentColor="blue" onClose={() => toggleWindow('diagnostics')} className="h-full">
                 <div className="flex flex-col h-full space-y-4 overflow-y-auto pr-2 custom-scrollbar">
                   <DiagnosticItem 
@@ -553,8 +593,8 @@ function AppContent() {
           )}
 
           {activeWindows.settings && (
-            <WindowWrapper key="settings" position="top-[10%] left-1/2 -translate-x-1/2 w-[90%] h-[80%] z-50">
-              <Panel title="AI Configuration" accentColor="blue" onClose={() => toggleWindow('settings')} className="h-full">
+            <WindowWrapper key="settings" hudMotionScale={effectiveHudMotionScale} position="top-[10%] left-1/2 -translate-x-1/2 w-[90%] h-[80%] z-50">
+              <Panel title="Operator Settings" accentColor="blue" onClose={() => toggleWindow('settings')} className="h-full">
                 <Suspense fallback={<PanelLoadingFallback />}>
                   <SettingsPanel onClose={() => toggleWindow('settings')} />
                 </Suspense>
