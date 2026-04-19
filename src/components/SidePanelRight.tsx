@@ -1,21 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { motion } from 'motion/react';
 import { Cpu, Database, Network, Power, Settings } from 'lucide-react';
+import { useNeuralUi } from '../context/NeuralContext';
 
 export function SidePanelRight({ onToggleSettings }: { onToggleSettings?: () => void }) {
-  const [cpuLoad, setCpuLoad] = useState(42);
-  const [ramLoad, setRamLoad] = useState(65);
-  const [netLoad, setNetLoad] = useState(12);
-  const [isOverclocked, setIsOverclocked] = useState(false);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCpuLoad(prev => Math.min(100, Math.max(0, prev + (Math.random() * 10 - 5))));
-      setRamLoad(prev => Math.min(100, Math.max(0, prev + (Math.random() * 4 - 2))));
-      setNetLoad(prev => Math.min(100, Math.max(0, prev + (Math.random() * 6 - 3))));
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
+  const { neuralSurge } = useNeuralUi();
+  /** Decorative load levels — not OS telemetry (unavailable in the browser without misleading RNG). */
+  const cpuLoad = neuralSurge ? 88 : 42;
+  const ramLoad = neuralSurge ? 78 : 52;
+  const netLoad = neuralSurge ? 72 : 28;
 
   return (
     <div className="relative w-20 h-fit bg-[linear-gradient(180deg,rgba(31,35,44,0.92),rgba(19,22,28,0.96))] backdrop-blur-md border-l-2 border-r-2 border-[#3a3f47] py-8 flex flex-col items-center gap-8 shadow-[0_20px_38px_rgba(0,0,0,0.38)] overflow-hidden">
@@ -24,20 +17,21 @@ export function SidePanelRight({ onToggleSettings }: { onToggleSettings?: () => 
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),transparent_20%,transparent_78%,rgba(0,0,0,0.18))] pointer-events-none" />
       <div className="absolute left-2 right-2 top-0 h-[2px] bg-gradient-to-r from-transparent via-cyber-blue/30 to-transparent pointer-events-none" />
       
-      {/* Top Power Button */}
-      <button 
-        onClick={() => setIsOverclocked(!isOverclocked)}
-        className={`relative w-10 h-10 rounded border-2 flex items-center justify-center transition-all duration-200 ${isOverclocked ? 'border-red-500 bg-red-500/20 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'border-gray-600 text-gray-400 hover:border-gray-400 hover:bg-white/5'}`}
+      {/* Top indicator — tied to active AI/speech pulse only (not hardware overclock). */}
+      <div
+        className={`relative w-10 h-10 rounded border-2 flex items-center justify-center transition-all duration-200 ${neuralSurge ? 'border-red-500 bg-red-500/20 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'border-gray-600 text-gray-400'}`}
+        title={neuralSurge ? 'Neural activity pulse (AI / voice output active)' : 'Neural idle — bars are decorative, not CPU telemetry'}
+        aria-label={neuralSurge ? 'Neural activity pulse active' : 'Neural activity idle'}
       >
         <Power className="w-5 h-5" />
         <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[8px] font-mono whitespace-nowrap text-gray-500 uppercase tracking-[0.18em]">
-          Overclock
+          Neural
         </div>
-      </button>
+      </div>
 
       {/* Stats Bars */}
       <div className="flex flex-col gap-6 w-full px-3">
-        <StatBar label="CPU" value={cpuLoad} icon={<Cpu className="w-3 h-3" />} color={isOverclocked ? 'red' : 'blue'} />
+        <StatBar label="CPU" value={cpuLoad} icon={<Cpu className="w-3 h-3" />} color={neuralSurge ? 'red' : 'blue'} />
         <StatBar label="RAM" value={ramLoad} icon={<Database className="w-3 h-3" />} color="blue" />
         <StatBar label="NET" value={netLoad} icon={<Network className="w-3 h-3" />} color="green" />
       </div>

@@ -32,3 +32,27 @@ Branch: work
 - `src/components/Robot2D.tsx` (keep the live center robot concept and visual treatment intact).
 - `src/components/NerdLogo.tsx`, `src/components/SystemStats.tsx`, `src/components/NeuralVisualizer.tsx` (not root-cause files for control truthfulness or overlap).
 - `server.ts`, `src/authClient.ts`, `src/lib/supabase.ts` (outside this UI audit ledger purpose).
+
+## Task — UI Dock / Control Truthfulness
+Date: 2026-04-19
+Owner Agent: GPT-5.3-Codex
+Branch: cursor/wire-dock-controls-ac63
+
+### Files changed
+- src/App.tsx
+- src/components/SystemStats.tsx
+- src/components/SidePanelRight.tsx
+- src/components/NetworkScreen.tsx
+- src/components/BottomDock.tsx
+
+### Verified outcomes
+- Dock controls are now classified and made more truthful
+- Fake terminal interval removed
+- Fake overclock toggle removed
+- Network screen simulator controls replaced with smaller honest implementation
+- Lint passed
+- Build passed
+
+### Notes
+- Scope expanded beyond BottomDock.tsx into adjacent control-truthfulness surfaces
+- Acceptable because changes remained tied to shell honesty and misleading controls
