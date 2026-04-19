@@ -362,12 +362,14 @@ function AppContent() {
           </div>
         </div>
 
-        {/* Bottom Chat Interface — collapsed by default so it never covers the robot or hotspots */}
+        {/* Bottom Chat Interface — collapsed by default so it never covers the robot or hotspots.
+            When minimized the pill sits above the dock with its own higher z-index so it is always
+            reachable; when expanded the chat frame itself claims space without covering the robot. */}
         <motion.div
           initial={false}
           animate={{ height: chatMinimized ? 44 : '48%' }}
           transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-          className={`absolute bottom-24 left-0 right-0 z-30 ${chatMinimized ? 'pointer-events-none' : ''}`}
+          className={`absolute left-0 right-0 ${chatMinimized ? 'bottom-[132px] z-[45] pointer-events-none' : 'bottom-24 z-30'}`}
         >
           <Suspense fallback={<div className="w-full h-full flex items-center justify-center"><div className="w-8 h-8 border-2 border-cyber-blue border-t-transparent rounded-full animate-spin"></div></div>}>
             <ChatInterface
