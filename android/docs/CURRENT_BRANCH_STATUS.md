@@ -1,14 +1,14 @@
 # CURRENT_BRANCH_STATUS.md
 
 ## Current branch state summary
-The latest inspected `neo_final` branch is in a good state and should be treated as the stable polish base.
+Treat this document as describing the **current** repo: Supabase-backed auth and data, Capacitor-ready Android, and **2D-first** UI policy.
 
 ### Verified branch truths
 - `Robot2D` is active in `src/App.tsx`
 - `Robot3D` is parked and marked on hold
 - split neural hooks exist
 - server AI routes are protected and validated
-- Firebase redirect auth is active
+- **Supabase** Google auth is active (web and native/Capacitor flows per `src/authClient.ts`)
 - lint/build were verified green in the latest strong inspection state for this branch
 
 ## Remaining likely work categories

@@ -1,28 +1,29 @@
-# N.E.O. Supabase Migration Pack
+# N.E.O. Supabase migration pack
 
-This pack is tailored to the uploaded `N.E.O.-the-N.E.R.D-main` project.
+This pack was tailored to the uploaded `N.E.O.-the-N.E.R.D-main` project and documents the **Firebase → Supabase** migration path.
 
-## What this project is right now
-- React + Vite frontend
-- Node/Express server in `server.ts`
-- Firebase Auth on the client
-- Firestore for tasks/messages
-- Firebase Admin token verification on the server
-- Gemini server routes already present and mostly healthy
+## Current branch status
 
-## Why this pack exists
-The app is still Firebase-based. Supabase keys alone will not make it run.
-This pack gives a controlled, file-specific migration path from Firebase to Supabase so one backend is finished instead of two backends being half-configured.
+The **active** app on this branch is **Supabase-backed**: Supabase Auth (Google), Postgres tables for tasks and messages (with RLS), and Supabase JWT verification on the server for protected AI routes. Capacitor Android is supported; **`Robot2D` is live** and **`Robot3D` is parked**.
 
-## Recommended order
-1. Read `docs/CURRENT_FIREBASE_DEPENDENCY_MAP.md`
-2. Read `docs/TARGET_SUPABASE_ARCHITECTURE.md`
+Use **`README.md`** and **`.env.example`** for day-to-day setup. The sections below remain useful as **ordered migration guidance** or for understanding historical decisions.
+
+## What the migration changed (summary)
+
+- Client: Supabase Auth and Postgres-backed data access (replacing Firebase client SDK usage).
+- Server: Supabase JWT verification (replacing Firebase Admin).
+- Optional cleanup: remove obsolete Firebase config/deps only when no longer referenced (see migration prompts).
+
+## Recommended reading order
+
+1. `docs/LEGACY_FIREBASE_DEPENDENCY_SNAPSHOT.md` (historical pre-Supabase snapshot only)
+2. `docs/TARGET_SUPABASE_ARCHITECTURE.md`
 3. Create the Supabase project and rotate any leaked keys
 4. Execute SQL in `supabase/sql/` in order
 5. Update `.env` using `templates/.env.supabase.example`
-6. Apply the migration tasks using prompts from `prompts/`
+6. Apply migration tasks using prompts from `prompts/` where still relevant
 7. Run verification from `docs/POST_MIGRATION_VERIFICATION.md`
 
 ## Important branch rule
-This pack assumes the app remains **2D robot authoritative** while the backend is migrated.
-No UI redesign. No center-layout changes. No 3D revival during backend work.
+
+The app remains **2D robot authoritative** while backend work continues: no UI redesign, no center-layout changes, no 3D revival during backend tasks unless explicitly scoped.

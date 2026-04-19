@@ -51,8 +51,9 @@ If a bug can be fixed in one file, do not refactor six.
 - `server.ts`
 
 ### Auth and persistence
-- `src/firebase.ts`
-- `firestore.rules`
+- `src/authClient.ts`
+- `src/lib/supabase.ts`
+- Supabase RLS policies (see `supabase/sql/`)
 
 ### Neural/media runtime
 - `src/context/NeuralContext.tsx`

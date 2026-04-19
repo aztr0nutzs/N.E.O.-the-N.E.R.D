@@ -1,7 +1,7 @@
 import React, { createContext, useContext, ReactNode, useState, useEffect, useMemo, useCallback } from 'react';
 import { User } from '@supabase/supabase-js';
 import { useNeuralSystems } from '../hooks/useNeuralSystems';
-import { getClientSafeMessage, initializeMobileAuth } from '../firebase';
+import { getClientSafeMessage, initializeMobileAuth } from '../authClient';
 import { supabase } from '../lib/supabase';
 
 export type Persona = 'NEO' | 'FRIDAY' | 'EDITH' | 'ULTRON';

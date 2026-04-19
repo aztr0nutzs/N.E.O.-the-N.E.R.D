@@ -17,9 +17,9 @@
 - server enforces auth and rate limiting
 
 ### Auth and persistence
-- Firebase client auth in `src/firebase.ts`
-- redirect-based Google auth flow
-- Firestore-backed persistence for relevant app data
+- Supabase client auth and session handling in `src/authClient.ts` (with `src/lib/supabase.ts`)
+- Google sign-in (web redirect and Capacitor/native flows as implemented)
+- Postgres-backed persistence for tasks/messages (RLS on `public.tasks` and `public.messages`)
 
 ### Neural/media runtime
 - `useSpeechRecognition.ts` handles speech recognition lifecycle
@@ -29,12 +29,12 @@
 - `NeuralContext.tsx` exposes the runtime state to the app
 
 ## Main runtime flow
-1. user authenticates
+1. user authenticates via Supabase
 2. app shell renders
 3. systems boot via `startSystems()`
 4. media + speech + motion hooks initialize
-5. chat UI uses Firebase ID token to call server AI routes
-6. server validates and forwards to Gemini
+5. chat UI uses **Supabase access token** (bearer JWT) to call server AI routes
+6. server validates JWT and forwards to Gemini
 
 ## Branch-specific decisions
 ### Why 2D is authoritative now

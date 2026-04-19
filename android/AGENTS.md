@@ -6,6 +6,7 @@ This repository is the **stable 2D polish branch** of the J.A.R.V.I.S./NERD inte
 ### Authoritative branch truths
 - The live center robot in this branch is **`Robot2D`**.
 - **`Robot3D` is on hold** and must not be re-enabled in this branch.
+- **Supabase** is the live backend (Auth + Postgres); **Capacitor Android** is an active deployment path.
 - The center framing, composition, and panel placement are considered **protected UI structure**.
 - This branch is intended for **hardening, cleanup, performance tuning, and visual polish**, not feature churn or layout redesign.
 
@@ -57,7 +58,7 @@ Changes in these files must be especially careful and minimal:
 - `src/App.tsx`
 - `src/components/ChatInterface.tsx`
 - `server.ts`
-- `src/firebase.ts`
+- `src/authClient.ts`
 - `src/context/NeuralContext.tsx`
 - `src/hooks/useNeuralSystems.ts`
 - `src/hooks/useSpeechRecognition.ts`
@@ -79,9 +80,9 @@ Changes in these files must be especially careful and minimal:
 - Tighten validation, do not loosen it.
 - Never expose provider secrets to the client.
 
-### Firebase/auth policy
-- Keep redirect-based sign-in flow.
-- Keep real Firebase ID token usage for protected server calls.
+### Supabase auth policy
+- Keep Google sign-in via Supabase (web redirect + native OAuth/deep link flow as implemented).
+- Keep real **Supabase access tokens** (bearer JWT) for protected server calls.
 - Never reintroduce fake anonymous token fallbacks.
 
 ## Completion standard

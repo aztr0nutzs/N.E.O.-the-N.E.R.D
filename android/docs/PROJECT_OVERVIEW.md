@@ -1,12 +1,12 @@
 # PROJECT_OVERVIEW.md
 
 ## What this project is
-J.A.R.V.I.S. Interface is a Vite + React + TypeScript application that presents a premium futuristic AI dashboard UI backed by an Express server that proxies Gemini AI requests. It also integrates Firebase auth/Firestore persistence and a 3D assistant viewport driven by React Three Fiber and Drei.
+J.A.R.V.I.S. Interface is a Vite + React + TypeScript application that presents a premium futuristic AI dashboard UI backed by an Express server that proxies Gemini AI requests. It uses **Supabase** for authentication and Postgres-backed persistence. A **3D** assistant viewport exists in-tree as **parked/on-hold** code; the **live** center experience is **`Robot2D`**.
 
 ## Product pillars
 1. Premium futuristic UI must remain visually dense and high-end.
 2. Protected AI actions must stay server-routed.
-3. The 3D assistant is part of the product, not optional trim.
+3. The 3D assistant may return later experimentally; this branch treats **2D** as the product path.
 4. Neural/media behaviors should feel responsive without becoming brittle.
 5. Corrections must improve correctness without flattening the experience.
 
