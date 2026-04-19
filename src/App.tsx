@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import { SystemStats } from './components/SystemStats';
 import { Panel } from './components/Panel';
 import { SidePanelLeft } from './components/SidePanelLeft';
@@ -139,6 +139,7 @@ export default function App() {
 
 function AppContent() {
   const { isSystemsReady, startSystems, lastTranscript, systemsWarning, systemsError } = useNeuralSystem();
+  const { audioData, userPosition } = useNeuralRealtime();
   const { user, authLoading, authError, setAuthError } = useNeuralAuth();
   const [showNetworkScreen, setShowNetworkScreen] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -178,29 +179,44 @@ function AppContent() {
     }
   }, [lastTranscript]);
 
-  const [terminalLines, setTerminalLines] = useState<string[]>([
-    'Initializing core subroutines...',
-    'Loading neural network weights...',
-    'Establishing secure uplink...',
-    'SYSTEM READY.'
+  const [terminalLines] = useState<string[]>([
+    'N.E.O. system terminal (display-only).',
+    'No interactive shell is attached to this web session.',
+    'Use Mission Logs and chat for operational actions.',
   ]);
-
-  useEffect(() => {
-    if (activeWindows.terminal) {
-      const interval = setInterval(() => {
-        const commands = ['Scanning sector 7G...', 'Recalibrating sensors...', 'Optimizing power routing...', 'Analyzing network traffic...', 'Updating threat definitions...'];
-        setTerminalLines(prev => {
-          const newLines = [...prev, `[${new Date().toISOString().split('T')[1].slice(0, -1)}] ${commands[Math.floor(Math.random() * commands.length)]}`];
-          return newLines.slice(-10); // Keep last 10 lines
-        });
-      }, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [activeWindows.terminal]);
 
   const toggleWindow = (key: keyof typeof activeWindows) => {
     setActiveWindows(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+  const environmentalTelemetry = useMemo(() => {
+    const motionMag = Math.hypot(userPosition.x, userPosition.y);
+    const motionPct = Math.min(100, Math.round(motionMag * 100));
+
+    let spectralAvg = 0;
+    if (audioData.length > 0) {
+      let sum = 0;
+      for (let i = 0; i < audioData.length; i += 1) sum += audioData[i];
+      spectralAvg = sum / audioData.length;
+    }
+    const spectralPct = Math.min(100, Math.round((spectralAvg / 255) * 100));
+
+    const nav = typeof navigator !== 'undefined' ? navigator : undefined;
+    const online = nav?.onLine ?? true;
+    const downlinkMbps =
+      (nav as Navigator & { connection?: { downlink?: number } })?.connection?.downlink;
+
+    const visibility =
+      typeof document !== 'undefined' ? document.visibilityState : 'unknown';
+
+    return {
+      motionPct,
+      spectralPct,
+      online,
+      downlinkMbps: typeof downlinkMbps === 'number' && Number.isFinite(downlinkMbps) ? downlinkMbps : null,
+      visibility,
+    };
+  }, [audioData, userPosition.x, userPosition.y]);
 
   const [isConnecting, setIsConnecting] = useState(false);
 
@@ -304,7 +320,7 @@ function AppContent() {
         )}
         {/* Top Left: System Stats (Energy Module) */}
         <div className="absolute top-4 left-4 w-[240px] h-[90px] z-30">
-          <SystemStats />
+          <SystemStats onOpenDiagnostics={() => toggleWindow('diagnostics')} />
         </div>
 
         {/* Top Right: NERD Logo & Power */}
@@ -409,22 +425,36 @@ function AppContent() {
           {activeWindows.sensors && (
             <WindowWrapper key="sensors" position="top-1/4 left-1/2 -translate-x-1/2 w-[90%] z-50">
               <Panel title="Environmental" accentColor="blue" onClose={() => toggleWindow('sensors')}>
+                <p className="text-[9px] font-mono text-gray-500 mb-3 leading-relaxed">
+                  Live fields below come from the armed local pipeline (camera motion + mic spectrum). No outdoor weather or radiation hardware is connected.
+                </p>
                 <div className="grid grid-cols-2 gap-4 font-mono text-sm">
                   <div className="bg-black/50 p-3 rounded border border-bio-orange/30 shadow-[0_0_10px_rgba(255,140,0,0.1)_inset]">
-                    <div className="text-gray-500 text-[10px] mb-1">INT TEMP</div>
-                    <div className="text-bio-orange font-bold text-lg">24°C</div>
+                    <div className="text-gray-500 text-[10px] mb-1">MOTION INDEX</div>
+                    <div className="text-bio-orange font-bold text-lg">
+                      {isSystemsReady ? `${environmentalTelemetry.motionPct}%` : '—'}
+                    </div>
                   </div>
                   <div className="bg-black/50 p-3 rounded border border-cyber-blue/30 shadow-[0_0_10px_rgba(0,255,255,0.1)_inset]">
-                    <div className="text-gray-500 text-[10px] mb-1">EXT TEMP</div>
-                    <div className="text-cyber-blue font-bold text-lg">-45°C</div>
+                    <div className="text-gray-500 text-[10px] mb-1">NETWORK</div>
+                    <div className="text-cyber-blue font-bold text-lg leading-tight">
+                      {environmentalTelemetry.online ? 'ONLINE' : 'OFFLINE'}
+                      {environmentalTelemetry.downlinkMbps != null && (
+                        <span className="block text-[10px] font-normal text-gray-400 mt-1">
+                          Est. downlink {environmentalTelemetry.downlinkMbps.toFixed(1)} Mbps
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="bg-black/50 p-3 rounded border border-neon-green/30 shadow-[0_0_10px_rgba(57,255,20,0.1)_inset]">
-                    <div className="text-gray-500 text-[10px] mb-1">PRESSURE</div>
-                    <div className="text-neon-green font-bold text-lg">1013 hPa</div>
+                    <div className="text-gray-500 text-[10px] mb-1">ACOUSTIC ACTIVITY</div>
+                    <div className="text-neon-green font-bold text-lg">
+                      {isSystemsReady ? `${environmentalTelemetry.spectralPct}%` : '—'}
+                    </div>
                   </div>
                   <div className="bg-black/50 p-3 rounded border border-fuchsia-500/30 shadow-[0_0_10px_rgba(255,0,255,0.1)_inset]">
-                    <div className="text-gray-500 text-[10px] mb-1">RADIATION</div>
-                    <div className="text-fuchsia-500 font-bold text-lg">0.02 µSv</div>
+                    <div className="text-gray-500 text-[10px] mb-1">PAGE VISIBILITY</div>
+                    <div className="text-fuchsia-500 font-bold text-lg uppercase">{environmentalTelemetry.visibility}</div>
                   </div>
                 </div>
               </Panel>
@@ -487,13 +517,13 @@ function AppContent() {
                   />
                   <DiagnosticItem 
                     label="Gemini Core" 
-                    status="online" 
-                    details="Advanced reasoning and generative capabilities."
+                    status="warning" 
+                    details="Model runs on the server when you use chat or protected AI routes — not a continuously attached local core."
                   />
                   <DiagnosticItem 
                     label="Network Status" 
-                    status="online" 
-                    details="Connected to secure network."
+                    status={typeof navigator !== 'undefined' && navigator.onLine ? 'online' : 'offline'} 
+                    details={typeof navigator !== 'undefined' && navigator.onLine ? 'Browser reports an active network path.' : 'Browser reports offline — cloud sync and AI calls will fail until connectivity returns.'}
                   />
                   <DiagnosticItem 
                     label="Supabase Sync" 
@@ -502,7 +532,7 @@ function AppContent() {
                   />
                   <div className="mt-auto pt-4 border-t border-gray-800 flex justify-between items-center">
                     <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">
-                      All systems nominal
+                      {isSystemsReady && user ? 'Core paths ready' : 'Review items above'}
                     </div>
                     <button 
                       onClick={() => window.location.reload()}
