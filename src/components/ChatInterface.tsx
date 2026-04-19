@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Terminal, Image as ImageIcon, Search, MapPin, Brain, Zap, Video, Mic, Volume2, X, Cpu, Shield, Trash2 } from 'lucide-react';
 
-import { auth, fetchProtectedJson, getClientSafeMessage, handleFirestoreError, OperationType } from '../firebase';
+import { fetchProtectedJson, getClientSafeMessage, handleFirestoreError, OperationType } from '../firebase';
 import { Persona, useNeuralAuth, useNeuralSystem, useNeuralUi } from '../context/NeuralContext';
 import { supabase } from '../lib/supabase';
 
@@ -62,6 +62,8 @@ const HISTORY_SYNC_MESSAGE = 'Mission log sync unavailable. Local display may be
 const VIDEO_POLL_INTERVAL_MS = 5000;
 const MAX_VIDEO_POLL_ATTEMPTS = 24;
 const REMOTE_FETCH_TIMEOUT_MS = 60000;
+/** Matches `messages_image_url_len` / `messages_video_url_len` in Supabase schema (2000). */
+const MAX_PERSISTED_MEDIA_URL_LENGTH = 2000;
 
 interface AiChatResponse {
   error?: string;
@@ -109,6 +111,7 @@ export function ChatInterface() {
   
   const userId = user?.id;
   const requestVersionRef = useRef(0);
+  const messagesLoadGenerationRef = useRef(0);
 
   useEffect(() => {
     let modelName = 'gemini-3-flash-preview';
@@ -139,10 +142,13 @@ export function ChatInterface() {
 
   useEffect(() => {
     let isMounted = true;
+    const loadGeneration = ++messagesLoadGenerationRef.current;
 
     if (!userId) {
       setMessages([{ role: 'assistant', content: DEFAULT_GREETING }]);
-      return;
+      return () => {
+        isMounted = false;
+      };
     }
 
     const loadMessages = async () => {
@@ -158,8 +164,11 @@ export function ChatInterface() {
           throw error;
         }
 
+        if (!isMounted || loadGeneration !== messagesLoadGenerationRef.current) {
+          return;
+        }
+
         const loadedMessages = (data as MessageRow[] | null)?.map(mapMessageRow) ?? [];
-        if (!isMounted) return;
 
         if (loadedMessages.length === 0) {
           setMessages([{ role: 'assistant', content: DEFAULT_GREETING }]);
@@ -167,10 +176,13 @@ export function ChatInterface() {
           setMessages(loadedMessages);
         }
       } catch (error) {
+        if (!isMounted || loadGeneration !== messagesLoadGenerationRef.current) {
+          return;
+        }
         try {
           handleFirestoreError(error, OperationType.LIST, path);
         } catch (handledError) {
-          if (isMounted) {
+          if (isMounted && loadGeneration === messagesLoadGenerationRef.current) {
             setMessages([{ role: 'assistant', content: `${HISTORY_SYNC_MESSAGE} ${getClientSafeMessage(handledError)}` }]);
           }
         }
@@ -349,26 +361,39 @@ export function ChatInterface() {
     window.speechSynthesis.speak(utterance);
   };
 
-  const saveMessage = async (msg: Message) => {
-    if (!userId) return false;
+  const persistableMediaFields = (msg: Message) => {
+    const imageUrl =
+      msg.imageUrl && msg.imageUrl.length <= MAX_PERSISTED_MEDIA_URL_LENGTH ? msg.imageUrl : null;
+    const videoUrl =
+      msg.videoUrl && msg.videoUrl.length <= MAX_PERSISTED_MEDIA_URL_LENGTH ? msg.videoUrl : null;
+    return { image_url: imageUrl, video_url: videoUrl };
+  };
+
+  const saveMessage = async (msg: Message): Promise<{ ok: boolean; id?: string }> => {
+    if (!userId) return { ok: false };
     const newId = Date.now().toString() + Math.random().toString(36).substring(7);
     const path = `messages/${newId}`;
+    const media = persistableMediaFields(msg);
     try {
-      const { error } = await supabase.from('messages').insert({
-        id: newId,
-        user_id: userId,
-        role: msg.role,
-        content: msg.content,
-        image_url: msg.imageUrl ?? null,
-        video_url: msg.videoUrl ?? null,
-        audio_data: msg.audioData ?? null,
-      });
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          id: newId,
+          user_id: userId,
+          role: msg.role,
+          content: msg.content,
+          image_url: media.image_url,
+          video_url: media.video_url,
+          audio_data: msg.audioData ?? null,
+        })
+        .select('id')
+        .single();
 
       if (error) {
         throw error;
       }
 
-      return true;
+      return { ok: true, id: data?.id };
     } catch (error) {
       try {
         handleFirestoreError(error, OperationType.CREATE, path);
@@ -377,7 +402,7 @@ export function ChatInterface() {
           console.error('Message persistence failed:', handledError);
         }
       }
-      return false;
+      return { ok: false };
     }
   };
 
@@ -425,7 +450,7 @@ export function ChatInterface() {
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if ((!input.trim() && !selectedFile) || isLoading) return;
-    if (!userId || !auth.currentUser) {
+    if (!userId) {
       appendLocalAssistantMessage(SIGNED_OUT_MESSAGE);
       return;
     }
@@ -453,7 +478,12 @@ export function ChatInterface() {
 
       const newUserMsg: Message = { role: 'user', content: userMessage, imageUrl: fileDataUrl };
       setMessages(prev => [...prev, newUserMsg]);
-      await saveMessage(newUserMsg);
+      const userSave = await saveMessage(newUserMsg);
+      if (userSave.id) {
+        setMessages(prev =>
+          prev.map((m, i) => (i === prev.length - 1 && m.role === 'user' && !m.id ? { ...m, id: userSave.id } : m))
+        );
+      }
 
       let responseText = '';
       let generatedImageUrl = '';
@@ -605,7 +635,14 @@ export function ChatInterface() {
       };
 
       setMessages(prev => [...prev, newAssistantMsg]);
-      await saveMessage(newAssistantMsg);
+      const assistantSave = await saveMessage(newAssistantMsg);
+      if (assistantSave.id) {
+        setMessages(prev =>
+          prev.map((m, i) =>
+            i === prev.length - 1 && m.role === 'assistant' && !m.id ? { ...m, id: assistantSave.id } : m
+          )
+        );
+      }
 
       if (mode === 'tts') {
         speakText(responseText);
@@ -622,7 +659,14 @@ export function ChatInterface() {
         content: getClientSafeMessage(error, 'Connection to main servers disrupted. Please try again.')
       };
       setMessages(prev => [...prev, errorMsg]);
-      await saveMessage(errorMsg);
+      const errorSave = await saveMessage(errorMsg);
+      if (errorSave.id) {
+        setMessages(prev =>
+          prev.map((m, i) =>
+            i === prev.length - 1 && m.role === 'assistant' && !m.id ? { ...m, id: errorSave.id } : m
+          )
+        );
+      }
     } finally {
       if (!isRequestCurrent(requestVersion)) return;
       setIsLoading(false);
