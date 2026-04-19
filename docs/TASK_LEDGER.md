@@ -56,3 +56,28 @@ Branch: cursor/wire-dock-controls-ac63
 ### Notes
 - Scope expanded beyond BottomDock.tsx into adjacent control-truthfulness surfaces
 - Acceptable because changes remained tied to shell honesty and misleading controls
+
+## Task — Chat Layout Fix
+Date: 2026-04-19
+Owner Agent: Codex / Composer
+Branch: task/chat-layout-fix
+
+### Files changed
+- src/App.tsx
+- src/components/ChatInterface.tsx
+
+### Root cause
+- Robot occupied roughly 10%–60% vertical band
+- Chat occupied bottom-anchored 48% height slice
+- Those bands intersected on short viewports
+- z-index and DOM order made the overlap visible and interaction-hostile
+
+### Verified outcomes
+- Chat no longer covers robot band
+- Chat no longer blocks critical controls
+- Dock stays reachable above chat
+- Chat transcript scrolls correctly inside its slot
+- Robot frame percentages unchanged
+- npm ci passed
+- npm run lint passed
+- npm run build passed
