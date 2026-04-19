@@ -82,6 +82,41 @@ Branch: task/chat-layout-fix
 - npm run lint passed
 - npm run build passed
 
+## Task — SidePanelRight Truthfulness
+Date: 2026-04-19
+Owner Agent: Codex / Composer
+Branch: task/sidepanelright-truthfulness
+
+### Goal
+Make the right-side panel truthful and non-misleading while preserving the premium NERD aesthetic.
+
+### Allowed files
+- src/components/SidePanelRight.tsx
+- src/App.tsx only if required for truthful state exposure or wiring
+- directly related context/provider files only if strictly necessary
+
+### Forbidden files
+- src/components/BottomDock.tsx
+- src/components/ChatInterface.tsx
+- src/components/NetworkScreen.tsx
+- src/components/SystemStats.tsx
+- src/components/Robot2D.tsx
+- auth/server/Supabase/Android files
+
+### Known audit findings
+- Prioritize button had no real onClick
+- Overclock only changed local visuals/state
+- CPU/RAM/NET bars were decorative or misleading
+- live vs decorative semantics need to be clearer
+
+### Success criteria
+- no misleading fake right-panel controls remain
+- decorative telemetry is clearly decorative
+- real controls are actually real
+- premium visual treatment is preserved
+- npm run lint passes
+- npm run build passes
+
 ## Task — Real settings access & HUD preferences
 Date: 2026-04-19
 Owner Agent: Codex / Composer
