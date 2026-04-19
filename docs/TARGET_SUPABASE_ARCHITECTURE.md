@@ -43,7 +43,7 @@ Use RLS policies so users can only access rows where `user_id = auth.uid()`.
 
 ## Files to introduce
 - `src/lib/supabase.ts`
-- `src/lib/authApi.ts` or replacement `src/firebase.ts` preserving helper names
+- `src/authClient.ts` (Supabase auth/session + protected JSON fetch; preserve helper names where the app already depends on them)
 - optional `src/lib/tasksApi.ts`
 - optional `src/lib/messagesApi.ts`
 - `src/lib/supabaseAdmin.ts` or server-local helper for token verification

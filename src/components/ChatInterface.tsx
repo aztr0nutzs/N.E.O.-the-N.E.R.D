@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Terminal, Image as ImageIcon, Search, MapPin, Brain, Zap, Video, Mic, Volume2, X, Cpu, Shield, Trash2 } from 'lucide-react';
 
-import { fetchProtectedJson, getClientSafeMessage, handleFirestoreError, OperationType } from '../firebase';
+import { fetchProtectedJson, getClientSafeMessage, handleDatabaseAccessError, OperationType } from '../authClient';
 import { Persona, useNeuralAuth, useNeuralSystem, useNeuralUi } from '../context/NeuralContext';
 import { supabase } from '../lib/supabase';
 
@@ -180,7 +180,7 @@ export function ChatInterface() {
           return;
         }
         try {
-          handleFirestoreError(error, OperationType.LIST, path);
+          handleDatabaseAccessError(error, OperationType.LIST, path);
         } catch (handledError) {
           if (isMounted && loadGeneration === messagesLoadGenerationRef.current) {
             setMessages([{ role: 'assistant', content: `${HISTORY_SYNC_MESSAGE} ${getClientSafeMessage(handledError)}` }]);
@@ -396,7 +396,7 @@ export function ChatInterface() {
       return { ok: true, id: data?.id };
     } catch (error) {
       try {
-        handleFirestoreError(error, OperationType.CREATE, path);
+        handleDatabaseAccessError(error, OperationType.CREATE, path);
       } catch (handledError) {
         if (import.meta.env.DEV) {
           console.error('Message persistence failed:', handledError);

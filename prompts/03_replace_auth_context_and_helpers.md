@@ -12,7 +12,7 @@
 Replace Firebase auth on the client with Supabase auth while preserving the existing app behavior and user-facing sign-in flow.
 
 ## Tasks
-1. Replace `src/firebase.ts` with a Supabase-based auth/helper module.
+1. Ensure the Supabase-based auth/helper module is canonical as `src/authClient.ts` (legacy docs may refer to `src/firebase.ts`).
 2. Preserve these exported behaviors or close equivalents:
    - sign in with Google
    - sign out

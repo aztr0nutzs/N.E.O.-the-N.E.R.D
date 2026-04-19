@@ -12,7 +12,7 @@ Perform a careful dead-code and stale-import cleanup pass across the project.
 - `server.ts`
 - `src/components/*.tsx`
 - `src/hooks/*.ts`
-- `src/firebase.ts`
+- `src/authClient.ts`
 - `src/context/*.tsx`
 
 ### Objectives

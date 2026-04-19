@@ -6,7 +6,7 @@ This pack is tailored specifically to the current `neo_final` branch:
 - `Robot3D` is parked/on hold
 - split neural hooks are active
 - server-side AI routes are protected and validated
-- Firebase redirect auth is active
+- Supabase Google auth is active (web + Capacitor flows)
 - build and lint were verified clean during the latest inspection
 
 ## Intended placement

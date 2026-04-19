@@ -12,7 +12,7 @@ Perform a **client auth and error resilience pass**.
 
 ## Focus files
 - `src/components/ChatInterface.tsx`
-- `src/firebase.ts`
+- `src/authClient.ts`
 - any directly related helpers/context files
 
 ## Mission

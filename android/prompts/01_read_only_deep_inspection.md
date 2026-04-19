@@ -31,7 +31,7 @@ Perform a full **read-only deep inspection** of the current `neo_final` branch.
 - `src/components/Robot2D.tsx`
 - `src/components/Robot3D.tsx`
 - `src/components/ChatInterface.tsx`
-- `src/firebase.ts`
+- `src/authClient.ts`
 - `server.ts`
 - `src/context/NeuralContext.tsx`
 - `src/hooks/useSpeechRecognition.ts`

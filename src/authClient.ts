@@ -359,7 +359,7 @@ export interface DataAccessErrorInfo {
   };
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+export function handleDatabaseAccessError(error: unknown, operationType: OperationType, path: string | null) {
   const user = auth.currentUser;
   const errInfo: DataAccessErrorInfo = {
     error: error instanceof Error ? error.message : String(error),

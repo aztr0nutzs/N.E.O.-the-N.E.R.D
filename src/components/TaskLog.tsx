@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Panel } from './Panel';
 import { CheckSquare, Square, AlertTriangle, Plus, Trash2 } from 'lucide-react';
-import { handleFirestoreError, OperationType } from '../firebase';
+import { handleDatabaseAccessError, OperationType } from '../authClient';
 import { useNeuralAuth } from '../context/NeuralContext';
 import { supabase } from '../lib/supabase';
 
@@ -65,7 +65,7 @@ export function TaskLog() {
         }
       } catch (error) {
         if (isMounted) {
-          handleFirestoreError(error, OperationType.LIST, path);
+          handleDatabaseAccessError(error, OperationType.LIST, path);
         }
       }
     };
@@ -99,7 +99,7 @@ export function TaskLog() {
         )
       );
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
+      handleDatabaseAccessError(error, OperationType.UPDATE, path);
     }
   };
 
@@ -156,7 +156,7 @@ export function TaskLog() {
         return nextTasks;
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
+      handleDatabaseAccessError(error, OperationType.CREATE, path);
     }
   };
 
@@ -177,7 +177,7 @@ export function TaskLog() {
 
       setTasks((currentTasks) => currentTasks.filter((task) => task.id !== id));
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+      handleDatabaseAccessError(error, OperationType.DELETE, path);
     }
   };
 

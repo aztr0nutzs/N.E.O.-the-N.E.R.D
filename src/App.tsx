@@ -8,7 +8,7 @@ import { NerdLogin } from './components/NerdLogin';
 import { NerdLogo } from './components/NerdLogo';
 import { Power, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { getClientSafeMessage, loginWithGoogle, logout } from './firebase';
+import { getClientSafeMessage, loginWithGoogle, logout } from './authClient';
 import { NeuralProvider, useNeuralAuth, useNeuralRealtime, useNeuralSystem } from './context/NeuralContext';
 
 const Robot2D = lazy(() => import('./components/Robot2D').then(module => ({ default: module.Robot2D })));
