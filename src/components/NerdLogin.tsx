@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 
 interface NerdLoginProps {
@@ -9,8 +9,56 @@ interface NerdLoginProps {
 
 const PARTICLE_COLORS = ['#ff3cac', '#00eaff', '#3ddc84', '#ffae00', '#ff6000'] as const;
 
+/**
+ * Optional `/neo_boot.mp4` behind the reactor frame: only when the asset exists, motion is allowed,
+ * and the browser is not advertising data-saver. Otherwise the static reactor art + canvas stay primary.
+ */
+function useLoginBootVideoPreference(): boolean {
+  const [allow, setAllow] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return;
+    }
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
+    if (reduced || saveData) {
+      setAllow(false);
+      return;
+    }
+
+    let cancelled = false;
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.src = '/neo_boot.mp4';
+    const onMeta = () => {
+      if (cancelled) return;
+      if (video.readyState >= 1 && Number.isFinite(video.duration) && video.duration > 0 && video.duration < 12) {
+        setAllow(true);
+      } else {
+        setAllow(false);
+      }
+    };
+    const onErr = () => {
+      if (!cancelled) setAllow(false);
+    };
+    video.addEventListener('loadedmetadata', onMeta);
+    video.addEventListener('error', onErr);
+    video.load();
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener('loadedmetadata', onMeta);
+      video.removeEventListener('error', onErr);
+    };
+  }, []);
+
+  return allow;
+}
+
 export function NerdLogin({ onLogin, isAuthenticating, authError }: NerdLoginProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const allowBootVideo = useLoginBootVideoPreference();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -160,6 +208,11 @@ export function NerdLogin({ onLogin, isAuthenticating, authError }: NerdLoginPro
               <span>Secure Access</span>
               <span>Supabase Auth</span>
             </div>
+            <p className="mb-4 w-full text-left text-[9px] leading-relaxed text-gray-500 [font-family:'Orbitron',monospace]">
+              {allowBootVideo
+                ? 'Boot reel plays muted behind the reactor (skipped on reduced motion, data-saver, or missing asset).'
+                : 'Boot reel uses a lightweight static reactor frame when video is unavailable or not appropriate for this session.'}
+            </p>
 
             <motion.div
               className="relative mb-8 mt-2 w-[302px] max-w-full"
@@ -183,6 +236,18 @@ export function NerdLogin({ onLogin, isAuthenticating, authError }: NerdLoginPro
 
                 <div className="relative overflow-hidden rounded-[28px] border border-[#1a3a1a] bg-[linear-gradient(180deg,#030606,#070b0c)] px-5 py-5 shadow-[inset_0_0_20px_rgba(61,220,132,0.08)]">
                   <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,234,255,0.12),transparent_55%)]" />
+                  {allowBootVideo && (
+                    <video
+                      className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover opacity-55"
+                      src="/neo_boot.mp4"
+                      autoPlay
+                      muted
+                      playsInline
+                      loop
+                      preload="metadata"
+                      aria-hidden
+                    />
+                  )}
                   <img
                     src="/login/nerd_login_reactor.png"
                     alt="N.E.R.D. launcher reactor"

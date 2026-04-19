@@ -15,7 +15,12 @@ const Robot2D = lazy(() => import('./components/Robot2D').then(module => ({ defa
 const ChatInterface = lazy(() => import('./components/ChatInterface').then(module => ({ default: module.ChatInterface })));
 const NetworkScreen = lazy(() => import('./components/NetworkScreen').then(module => ({ default: module.NetworkScreen })));
 const TaskLog = lazy(() => import('./components/TaskLog').then(module => ({ default: module.TaskLog })));
-const SettingsPanel = lazy(() => import('./components/SettingsPanel').then(module => ({ default: module.SettingsPanel })));
+const AssistantCommandCenterScreen = lazy(() =>
+  import('./components/AssistantCommandCenterScreen').then(module => ({ default: module.AssistantCommandCenterScreen }))
+);
+const SettingsMatrixScreen = lazy(() =>
+  import('./components/SettingsMatrixScreen').then(module => ({ default: module.SettingsMatrixScreen }))
+);
 
 function DiagnosticItem({ label, status, details }: { label: string, status: 'online' | 'offline' | 'warning', details: string }) {
   return (
@@ -170,6 +175,8 @@ function AppContent() {
   const { user, authLoading, authError, setAuthError } = useNeuralAuth();
   const { effectiveHudMotionScale, hudSettings } = useNeuralUi();
   const [showNetworkScreen, setShowNetworkScreen] = useState(false);
+  const [showAssistantCommandCenter, setShowAssistantCommandCenter] = useState(false);
+  const [showSettingsMatrix, setShowSettingsMatrix] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [chatMinimized, setChatMinimized] = useState(true);
   const [activeWindows, setActiveWindows] = useState({
@@ -178,7 +185,6 @@ function AppContent() {
     terminal: false,
     radar: false,
     diagnostics: false,
-    settings: false
   });
 
   // Voice Command Parsing
@@ -203,7 +209,10 @@ function AppContent() {
     } else if (transcript.includes('close radar') || transcript.includes('hide optics')) {
       setActiveWindows(prev => ({ ...prev, radar: false }));
     } else if (transcript.includes('close all windows')) {
-      setActiveWindows({ tasks: false, sensors: false, terminal: false, radar: false, diagnostics: false, settings: false });
+      setActiveWindows({ tasks: false, sensors: false, terminal: false, radar: false, diagnostics: false });
+      setShowAssistantCommandCenter(false);
+      setShowSettingsMatrix(false);
+      setShowNetworkScreen(false);
     }
   }, [lastTranscript]);
 
@@ -396,7 +405,7 @@ function AppContent() {
 
         {/* Right Side Panel */}
         <div className="absolute top-1/2 -translate-y-1/2 right-0 z-30">
-           <SidePanelRight onToggleSettings={() => toggleWindow('settings')} />
+           <SidePanelRight onToggleSettings={() => setShowSettingsMatrix(true)} />
         </div>
 
         {/* Center Robot */}
@@ -439,7 +448,7 @@ function AppContent() {
               onToggleMinimized={() => setChatMinimized(prev => !prev)}
               onOpenSettings={() => {
                 setChatMinimized(true);
-                setActiveWindows(prev => ({ ...prev, settings: true }));
+                setShowSettingsMatrix(true);
               }}
             />
           </Suspense>
@@ -448,11 +457,12 @@ function AppContent() {
         {/* Bottom Dock */}
         <div className="absolute bottom-4 left-0 right-0 z-40">
           <BottomDock
+            onCommandCenterClick={() => setShowAssistantCommandCenter(true)}
             onNetworkClick={() => setShowNetworkScreen(true)}
             onDiagnosticsClick={() => toggleWindow('diagnostics')}
             onSensorsClick={() => toggleWindow('sensors')}
             onTerminalClick={() => toggleWindow('terminal')}
-            onSettingsClick={() => toggleWindow('settings')}
+            onSettingsClick={() => setShowSettingsMatrix(true)}
           />
         </div>
 
@@ -592,21 +602,70 @@ function AppContent() {
             </WindowWrapper>
           )}
 
-          {activeWindows.settings && (
-            <WindowWrapper key="settings" hudMotionScale={effectiveHudMotionScale} position="top-[10%] left-1/2 -translate-x-1/2 w-[90%] h-[80%] z-50">
-              <Panel title="Operator Settings" accentColor="blue" onClose={() => toggleWindow('settings')} className="h-full">
-                <Suspense fallback={<PanelLoadingFallback />}>
-                  <SettingsPanel onClose={() => toggleWindow('settings')} />
-                </Suspense>
-              </Panel>
-            </WindowWrapper>
-          )}
         </AnimatePresence>
 
         <AnimatePresence>
           {showNetworkScreen && (
             <Suspense fallback={<div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center"><div className="w-8 h-8 border-2 border-cyber-blue border-t-transparent rounded-full animate-spin"></div></div>}>
               <NetworkScreen onClose={() => setShowNetworkScreen(false)} />
+            </Suspense>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showAssistantCommandCenter && (
+            <Suspense
+              fallback={
+                <div className="absolute inset-0 bg-black/80 z-[115] flex items-center justify-center">
+                  <div className="w-8 h-8 border-2 border-cyber-blue border-t-transparent rounded-full animate-spin" />
+                </div>
+              }
+            >
+              <AssistantCommandCenterScreen
+                onClose={() => setShowAssistantCommandCenter(false)}
+                onExpandChat={() => {
+                  setShowAssistantCommandCenter(false);
+                  setChatMinimized(false);
+                }}
+                onOpenMissionLogs={() => {
+                  setShowAssistantCommandCenter(false);
+                  setActiveWindows(prev => ({ ...prev, tasks: true }));
+                }}
+                onOpenNetwork={() => {
+                  setShowAssistantCommandCenter(false);
+                  setShowNetworkScreen(true);
+                }}
+                onOpenSettings={() => {
+                  setShowAssistantCommandCenter(false);
+                  setShowSettingsMatrix(true);
+                }}
+                onOpenDiagnostics={() => {
+                  setShowAssistantCommandCenter(false);
+                  setActiveWindows(prev => ({ ...prev, diagnostics: true }));
+                }}
+                onOpenSensors={() => {
+                  setShowAssistantCommandCenter(false);
+                  setActiveWindows(prev => ({ ...prev, sensors: true }));
+                }}
+                onOpenTerminal={() => {
+                  setShowAssistantCommandCenter(false);
+                  setActiveWindows(prev => ({ ...prev, terminal: true }));
+                }}
+              />
+            </Suspense>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showSettingsMatrix && (
+            <Suspense
+              fallback={
+                <div className="absolute inset-0 bg-black/80 z-[115] flex items-center justify-center">
+                  <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                </div>
+              }
+            >
+              <SettingsMatrixScreen onClose={() => setShowSettingsMatrix(false)} />
             </Suspense>
           )}
         </AnimatePresence>

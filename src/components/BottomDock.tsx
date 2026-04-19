@@ -9,6 +9,8 @@ export interface BottomDockActions {
   onSensorsClick?: () => void;
   onTerminalClick?: () => void;
   onSettingsClick?: () => void;
+  /** Center hub: assistant command center (real shortcuts into chat, logs, network, settings). */
+  onCommandCenterClick?: () => void;
 }
 
 export function BottomDock({
@@ -17,6 +19,7 @@ export function BottomDock({
   onSensorsClick,
   onTerminalClick,
   onSettingsClick,
+  onCommandCenterClick,
 }: BottomDockActions) {
   const { isSystemsReady, isListening, toggleListening, lastTranscript } = useNeuralSystem();
 
@@ -119,20 +122,42 @@ export function BottomDock({
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(0,255,255,0.08),transparent_42%)] pointer-events-none" />
         <div className="absolute left-4 right-4 top-0 h-[2px] bg-gradient-to-r from-transparent via-cyber-blue/35 to-transparent pointer-events-none" />
         
-        {/* Center Circular Element */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 bg-[linear-gradient(180deg,#111318,#090b0f)] rounded-full border-2 border-[#3a3f47] flex items-center justify-center z-20 shadow-[0_0_24px_rgba(0,0,0,0.5)]">
-          <div className="w-10 h-10 rounded-full border border-cyber-blue/45 flex items-center justify-center shadow-[0_0_18px_rgba(0,255,255,0.12)_inset]">
-            <div className="w-6 h-6 rounded-full bg-cyber-blue/20 flex items-center justify-center shadow-[0_0_18px_rgba(0,255,255,0.12)]">
-              <div className="w-2 h-2 rounded-full bg-cyber-blue shadow-[0_0_10px_#00ffff]" />
+        {/* Center hub — opens assistant command center when wired; otherwise decorative only. */}
+        {onCommandCenterClick ? (
+          <motion.button
+            type="button"
+            onClick={onCommandCenterClick}
+            aria-label="Assistant command center — operational hub"
+            title="Assistant command center — shortcuts to chat, mission logs, network, and settings"
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.97 }}
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 bg-[linear-gradient(180deg,#111318,#090b0f)] rounded-full border-2 border-cyber-blue/45 flex items-center justify-center z-20 shadow-[0_0_26px_rgba(0,255,255,0.22)] cursor-pointer hover:border-cyber-blue/70"
+          >
+            <div className="w-10 h-10 rounded-full border border-cyber-blue/55 flex items-center justify-center shadow-[0_0_18px_rgba(0,255,255,0.14)_inset]">
+              <div className="w-6 h-6 rounded-full bg-cyber-blue/25 flex items-center justify-center shadow-[0_0_18px_rgba(0,255,255,0.14)]">
+                <div className="w-2 h-2 rounded-full bg-cyber-blue shadow-[0_0_10px_#00ffff]" />
+              </div>
             </div>
+            <motion.div
+              className="absolute inset-0 rounded-full border-t-2 border-cyber-blue/40 pointer-events-none"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: 'linear' }}
+            />
+          </motion.button>
+        ) : (
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 bg-[linear-gradient(180deg,#111318,#090b0f)] rounded-full border-2 border-[#3a3f47] flex items-center justify-center z-20 shadow-[0_0_24px_rgba(0,0,0,0.5)]">
+            <div className="w-10 h-10 rounded-full border border-cyber-blue/45 flex items-center justify-center shadow-[0_0_18px_rgba(0,255,255,0.12)_inset]">
+              <div className="w-6 h-6 rounded-full bg-cyber-blue/20 flex items-center justify-center shadow-[0_0_18px_rgba(0,255,255,0.12)]">
+                <div className="w-2 h-2 rounded-full bg-cyber-blue shadow-[0_0_10px_#00ffff]" />
+              </div>
+            </div>
+            <motion.div
+              className="absolute inset-0 rounded-full border-t-2 border-cyber-blue/40"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: 'linear' }}
+            />
           </div>
-          {/* Radar Sweep */}
-          <motion.div 
-            className="absolute inset-0 rounded-full border-t-2 border-cyber-blue/40"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 2.6, repeat: Infinity, ease: "linear" }}
-          />
-        </div>
+        )}
 
         {/* Slots Left */}
         <div className="flex gap-2 z-10">
