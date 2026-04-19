@@ -202,29 +202,12 @@ function AppContent() {
   };
 
   const [isConnecting, setIsConnecting] = useState(false);
-  const [connectionProgress, setConnectionProgress] = useState(0);
-  const [connectionStep, setConnectionStep] = useState('');
 
   const handleStartSystems = async () => {
     setIsConnecting(true);
     try {
-      const steps = [
-        { msg: 'AI UNIFIED DEPLOYED', progress: 15 },
-        { msg: 'COMPLIANCE 100%', progress: 30 },
-        { msg: 'DEPLOYING ACTIVE', progress: 45 },
-        { msg: 'SYSTEM STATUS: NORMAL', progress: 60 },
-        { msg: 'CORE TEMP: 32C', progress: 75 },
-        { msg: 'BATTERY: 100%', progress: 90 },
-        { msg: 'V-CORE 5 INITIALIZED', progress: 95 },
-        { msg: 'SYSTEM ONLINE: ACTIVE', progress: 100 }
-      ];
-
-      for (const step of steps) {
-        setConnectionStep(step.msg);
-        setConnectionProgress(step.progress);
-        await new Promise(resolve => setTimeout(resolve, 600 + Math.random() * 400));
-      }
-
+      // Run sensor/mic init immediately in this user gesture so permissions stay reliable.
+      // Avoid fake “boot” delays that feel like a second sign-in and keep the phone idle longer than needed.
       await startSystems();
     } finally {
       setIsConnecting(false);
@@ -247,7 +230,7 @@ function AppContent() {
   if (authLoading) {
     return (
       <div className="min-h-screen w-full bg-[#050505] flex items-center justify-center font-sans overflow-hidden">
-        <div className="text-cyber-blue font-mono animate-pulse">BOOTING SYSTEM...</div>
+        <div className="text-cyber-blue font-mono animate-pulse">RESTORING SESSION...</div>
       </div>
     );
   }
@@ -272,7 +255,7 @@ function AppContent() {
         
         {/* Neural Aura Pulse */}
         <NeuralAura />
-        {/* Neural Link Overlay (if not ready) */}
+        {/* Local systems overlay (sensors not armed yet) */}
         {!isSystemsReady && (
           <div className="absolute inset-0 z-[100] bg-[#050505] flex flex-col items-center justify-center text-center overflow-hidden">
             {isConnecting ? (
@@ -282,25 +265,25 @@ function AppContent() {
                   autoPlay 
                   muted 
                   playsInline
+                  loop
                   className="w-full h-full object-cover"
-                  onEnded={startSystems}
                 />
               </div>
             ) : (
               <div className="relative z-10 flex flex-col items-center p-8">
                 <Shield className="w-20 h-20 text-cyber-blue mb-6 drop-shadow-[0_0_15px_#00ffff]" />
                 <h2 className="text-cyber-blue font-mono text-2xl font-bold mb-4 tracking-tighter uppercase drop-shadow-[0_0_10px_#00ffff]">
-                  NEURAL LINK REQUIRED
+                  LOCAL SYSTEMS STANDBY
                 </h2>
                 <p className="text-gray-400 font-mono text-xs mb-8 leading-relaxed max-w-[280px]">
-                  Biometric verification and environmental awareness systems are offline. Establish neural link to enable full V-CORE 5 tactical capabilities.
+                  You are signed in. On-device camera, microphone, and motion tracking stay off until you arm them here. This is separate from authentication.
                 </p>
                 <button 
                   onClick={handleStartSystems}
                   className="px-10 py-4 bg-cyber-blue/10 border border-cyber-blue text-cyber-blue font-mono font-bold tracking-widest rounded hover:bg-cyber-blue hover:text-black transition-all shadow-[0_0_20px_rgba(0,255,255,0.4)] relative overflow-hidden group"
                 >
                   <div className="absolute inset-0 bg-cyber-blue/20 translate-y-full group-hover:translate-y-0 transition-transform" />
-                  <span className="relative z-10">ESTABLISH LINK</span>
+                  <span className="relative z-10">ARM LOCAL SENSORS</span>
                 </button>
               </div>
             )}
@@ -318,7 +301,7 @@ function AppContent() {
              {isSystemsReady && (
                <div className="flex items-center gap-1 bg-black/40 border border-cyber-blue/30 px-2 py-0.5 rounded text-[8px] font-mono text-cyber-blue uppercase tracking-widest animate-pulse">
                  <div className="w-1 h-1 bg-cyber-blue rounded-full" />
-                 Neural Link Active
+                 Local sensors live
                </div>
              )}
              <button 
@@ -455,19 +438,19 @@ function AppContent() {
               <Panel title="System Diagnostics" accentColor="blue" onClose={() => toggleWindow('diagnostics')} className="h-full">
                 <div className="flex flex-col h-full space-y-4 overflow-y-auto pr-2 custom-scrollbar">
                   <DiagnosticItem 
-                    label="Neural Link" 
+                    label="Local sensor bus" 
                     status={isSystemsReady ? 'online' : 'offline'} 
-                    details="Biometric synchronization and environment awareness."
+                    details="On-device camera, microphone, and motion pipeline (armed after sign-in, not part of it)."
                   />
                   <DiagnosticItem 
                     label="Optics / Vision" 
                     status={isSystemsReady ? 'online' : 'offline'} 
-                    details="Real-time motion tracking and spatial analysis."
+                    details="Camera-backed motion tracking for the HUD."
                   />
                   <DiagnosticItem 
                     label="Audio Uplink" 
                     status={isSystemsReady ? 'online' : 'offline'} 
-                    details="Frequency analysis and voice command recognition."
+                    details="Mic spectrum analysis and optional voice commands."
                   />
                   <DiagnosticItem 
                     label="Gemini Core" 
@@ -482,7 +465,7 @@ function AppContent() {
                   <DiagnosticItem 
                     label="Supabase Sync" 
                     status={user ? 'online' : 'offline'} 
-                    details="Secure cloud persistence and authentication."
+                    details="Secure cloud persistence and account session."
                   />
                   <div className="mt-auto pt-4 border-t border-gray-800 flex justify-between items-center">
                     <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">
