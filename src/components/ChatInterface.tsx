@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Terminal, Image as ImageIcon, Search, MapPin, Brain, Zap, Video, Mic, Volume2, X, Cpu, Shield, Trash2 } from 'lucide-react';
+import { Send, Terminal, Image as ImageIcon, Search, MapPin, Brain, Zap, Video, Mic, Volume2, X, Cpu, Shield, Trash2, ChevronDown, ChevronUp, Settings as SettingsIcon } from 'lucide-react';
 
 import { fetchProtectedJson, getClientSafeMessage, handleDatabaseAccessError, OperationType } from '../authClient';
 import { Persona, useNeuralAuth, useNeuralSystem, useNeuralUi } from '../context/NeuralContext';
@@ -96,7 +96,13 @@ interface AiVideoStatusResponse {
   };
 }
 
-export function ChatInterface() {
+interface ChatInterfaceProps {
+  minimized?: boolean;
+  onToggleMinimized?: () => void;
+  onOpenSettings?: () => void;
+}
+
+export function ChatInterface({ minimized = false, onToggleMinimized, onOpenSettings }: ChatInterfaceProps = {}) {
   const { user } = useNeuralAuth();
   const { isListening, toggleListening, lastTranscript } = useNeuralSystem();
   const { setNeuralSurge, aiSettings, setCurrentModel } = useNeuralUi();
@@ -695,6 +701,25 @@ export function ChatInterface() {
 
   const activeColor = PERSONA_CONFIGS[persona].color;
 
+  if (minimized) {
+    return (
+      <div className="pointer-events-auto w-full h-full flex items-end justify-center px-4">
+        <button
+          type="button"
+          onClick={onToggleMinimized}
+          aria-label="Expand chat"
+          title="Expand chat"
+          className={`pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-full bg-[linear-gradient(180deg,rgba(21,24,31,0.95),rgba(14,17,23,0.98))] border border-${activeColor}/40 text-${activeColor} font-mono text-[10px] tracking-[0.22em] uppercase shadow-[0_10px_30px_rgba(0,0,0,0.45)] hover:bg-white/5 transition-all`}
+        >
+          <Cpu className="w-3.5 h-3.5" />
+          <span>{PERSONA_CONFIGS[persona].name}</span>
+          <span className="opacity-60">· Tap to chat</span>
+          <ChevronUp className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div 
       className="flex flex-col h-full w-full relative group p-1"
@@ -735,6 +760,28 @@ export function ChatInterface() {
           <button onClick={clearHistory} className="text-gray-500 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 rounded-sm p-1 transition-all" title="Clear History">
             <Trash2 className="w-3 h-3" />
           </button>
+          {onOpenSettings && (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="text-gray-500 hover:text-cyber-blue hover:bg-cyber-blue/10 border border-transparent hover:border-cyber-blue/20 rounded-sm p-1 transition-all"
+              title="AI configuration"
+              aria-label="Open AI configuration"
+            >
+              <SettingsIcon className="w-3 h-3" />
+            </button>
+          )}
+          {onToggleMinimized && (
+            <button
+              type="button"
+              onClick={onToggleMinimized}
+              className="text-gray-500 hover:text-cyber-blue hover:bg-cyber-blue/10 border border-transparent hover:border-cyber-blue/20 rounded-sm p-1 transition-all"
+              title="Minimize chat"
+              aria-label="Minimize chat"
+            >
+              <ChevronDown className="w-3 h-3" />
+            </button>
+          )}
           <div className={`text-[10px] font-mono text-${activeColor} animate-pulse flex items-center gap-1 tracking-[0.18em]`}>
             <Shield className="w-3 h-3" /> SECURE LINK
           </div>

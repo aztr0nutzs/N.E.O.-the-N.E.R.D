@@ -142,6 +142,7 @@ function AppContent() {
   const { user, authLoading, authError, setAuthError } = useNeuralAuth();
   const [showNetworkScreen, setShowNetworkScreen] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [chatMinimized, setChatMinimized] = useState(true);
   const [activeWindows, setActiveWindows] = useState({
     tasks: false,
     sensors: false,
@@ -361,16 +362,34 @@ function AppContent() {
           </div>
         </div>
 
-        {/* Bottom Chat Interface */}
-        <div className="absolute bottom-24 left-0 right-0 h-[40%] z-30">
+        {/* Bottom Chat Interface — collapsed by default so it never covers the robot or hotspots */}
+        <motion.div
+          initial={false}
+          animate={{ height: chatMinimized ? 44 : '48%' }}
+          transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+          className={`absolute bottom-24 left-0 right-0 z-30 ${chatMinimized ? 'pointer-events-none' : ''}`}
+        >
           <Suspense fallback={<div className="w-full h-full flex items-center justify-center"><div className="w-8 h-8 border-2 border-cyber-blue border-t-transparent rounded-full animate-spin"></div></div>}>
-            <ChatInterface />
+            <ChatInterface
+              minimized={chatMinimized}
+              onToggleMinimized={() => setChatMinimized(prev => !prev)}
+              onOpenSettings={() => {
+                setChatMinimized(true);
+                setActiveWindows(prev => ({ ...prev, settings: true }));
+              }}
+            />
           </Suspense>
-        </div>
+        </motion.div>
 
         {/* Bottom Dock */}
         <div className="absolute bottom-4 left-0 right-0 z-40">
-          <BottomDock onNetworkClick={() => setShowNetworkScreen(true)} />
+          <BottomDock
+            onNetworkClick={() => setShowNetworkScreen(true)}
+            onDiagnosticsClick={() => toggleWindow('diagnostics')}
+            onSensorsClick={() => toggleWindow('sensors')}
+            onTerminalClick={() => toggleWindow('terminal')}
+            onSettingsClick={() => toggleWindow('settings')}
+          />
         </div>
 
         {/* Floating Windows */}

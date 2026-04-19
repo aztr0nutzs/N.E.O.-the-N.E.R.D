@@ -44,12 +44,12 @@ export function SidePanelRight({ onToggleSettings }: { onToggleSettings?: () => 
 
       {/* Action Buttons */}
       <div className="flex flex-col gap-3 mt-auto w-full px-2">
-        <button className="w-full py-1.5 text-[8px] font-mono uppercase tracking-[0.2em] border border-neon-green/30 text-neon-green hover:bg-neon-green/10 rounded transition-colors bg-black/20">
-          Prioritize
-        </button>
-        <button 
+        <button
+          type="button"
           onClick={onToggleSettings}
           className="w-full py-1.5 text-[8px] font-mono uppercase tracking-[0.2em] border border-cyber-blue/30 text-cyber-blue hover:bg-cyber-blue/10 rounded transition-colors flex items-center justify-center gap-1 bg-black/20"
+          aria-label="Open AI configuration"
+          title="AI configuration"
         >
           <Settings className="w-2 h-2" />
           Settings
