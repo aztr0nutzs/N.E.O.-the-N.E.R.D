@@ -722,7 +722,7 @@ export function ChatInterface({ minimized = false, onToggleMinimized, onOpenSett
 
   return (
     <div 
-      className="flex flex-col h-full w-full relative group p-1"
+      className="flex flex-col h-full min-h-0 w-full relative group p-1"
     >
       {/* Heavy Industrial Frame */}
       <div className="absolute inset-0 bg-[linear-gradient(180deg,#1b1f27,#14171d)] border-[3px] border-[#3a3f47] rounded-xl shadow-[0_18px_42px_rgba(0,0,0,0.42)] overflow-hidden -z-10">
