@@ -27,7 +27,9 @@ export function TaskLog() {
 
     if (!userId) {
       setTasks([]);
-      return;
+      return () => {
+        isMounted = false;
+      };
     }
 
     const loadTasks = async () => {
@@ -62,7 +64,9 @@ export function TaskLog() {
           setTasks(loadedTasks);
         }
       } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, path);
+        if (isMounted) {
+          handleFirestoreError(error, OperationType.LIST, path);
+        }
       }
     };
 
