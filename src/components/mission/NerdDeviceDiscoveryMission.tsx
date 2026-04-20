@@ -3,6 +3,7 @@ import { Loader2, Radar, Wifi, WifiOff } from 'lucide-react';
 import { useNeuralAuth } from '../../context/NeuralContext';
 import {
   checkDeviceReachability,
+  fetchNetworkTimeline,
   getLastScanSnapshot,
   listDevices,
   openDeviceInterface,
@@ -13,6 +14,7 @@ import {
   type DeviceActionResult,
   type DeviceRecord,
   type NetworkScanResult,
+  type NetworkTimelineSummary,
   type ScanCoordinatorStatus,
   type ScanSnapshot,
 } from '../../lib/network';
@@ -46,6 +48,12 @@ function formatScanTime(scan: ScanSnapshot | null): string {
   return new Date(timestamp).toLocaleTimeString();
 }
 
+function formatEventTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
 function scanBadge(status: ScanCoordinatorStatus): string {
   if (status === 'idle') return 'ready';
   if (status === 'scanning') return 'scanning';
@@ -77,6 +85,7 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
   const [scanResult, setScanResult] = useState<NetworkScanResult | null>(null);
   const [devices, setDevices] = useState<DeviceRecord[]>([]);
   const [lastScan, setLastScan] = useState<ScanSnapshot | null>(null);
+  const [timeline, setTimeline] = useState<NetworkTimelineSummary | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [actionBusyKey, setActionBusyKey] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<DeviceActionResult | null>(null);
@@ -91,16 +100,19 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
     if (!user) {
       setDevices([]);
       setLastScan(null);
+      setTimeline(null);
       return;
     }
 
     try {
-      const [nextDevices, nextLastScan] = await Promise.all([
+      const [nextDevices, nextLastScan, nextTimeline] = await Promise.all([
         listDevices(user.id),
         getLastScanSnapshot(user.id),
+        fetchNetworkTimeline(user.id, { limit: 8, scanLimit: 4, eventLimit: 16 }),
       ]);
       setDevices(nextDevices);
       setLastScan(nextLastScan);
+      setTimeline(nextTimeline);
     } catch (error) {
       setScanError(getErrorMessage(error));
     }
@@ -122,6 +134,9 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
       setDevices(result.knownDevices);
       setLastScan(result.scanSnapshot);
       setScanStatus(result.status);
+      void fetchNetworkTimeline(user.id, { limit: 8, scanLimit: 4, eventLimit: 16 })
+        .then(setTimeline)
+        .catch((error) => setScanError(getErrorMessage(error)));
     } catch (error) {
       setScanStatus('failed');
       setScanError(getErrorMessage(error));
@@ -170,6 +185,7 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
                 ? await setDeviceFavorite(user.id, device.id, !device.favorite)
                 : await setDeviceIgnored(user.id, device.id, !device.ignored);
       applyActionResult(result);
+      void loadNetworkInventory();
     } catch (error) {
       setActionResult({
         actionType: action === 'reach' ? 'ping' : action === 'open' ? 'open_interface' : action,
@@ -182,7 +198,7 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
     } finally {
       setActionBusyKey(null);
     }
-  }, [applyActionResult, user]);
+  }, [applyActionResult, loadNetworkInventory, user]);
 
   useEffect(() => {
     const on = () => setOnline(true);
@@ -315,6 +331,44 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
           <div className="text-2xl font-black italic text-zinc-400">{conn ? 'API' : '-'}</div>
           <div className="text-[10px] font-bold italic text-zinc-500">NetInfo</div>
         </div>
+      </section>
+
+      <section className="mb-4 rounded-2xl border border-orange-400/12 bg-[rgba(22,22,22,0.68)] p-4 backdrop-blur-md">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-black italic uppercase tracking-[0.14rem] text-white">Recent changes</h2>
+            <p className="text-[10px] font-bold italic text-zinc-500">
+              Built from stored scan snapshots and device events only.
+            </p>
+          </div>
+          <span className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-2 py-1 text-[9px] font-black italic uppercase text-orange-200">
+            Review {timeline?.attentionItems.length ?? 0}
+          </span>
+        </div>
+        <p className="mb-3 text-[10px] leading-relaxed text-zinc-500">
+          {timeline?.summaryText ?? 'Sign in and run a truthful scan to build the change timeline.'}
+        </p>
+        {timeline?.items.length ? (
+          <div className="space-y-2">
+            {timeline.items.slice(0, 4).map((item) => (
+              <div key={item.id} className="rounded-xl border border-cyan-500/10 bg-black/45 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-black italic uppercase tracking-[0.08rem] text-cyan-200">
+                    {item.title}
+                  </span>
+                  <span className="shrink-0 text-[8px] font-black uppercase tracking-[0.08rem] text-zinc-600">
+                    {formatEventTime(item.occurredAt)}
+                  </span>
+                </div>
+                <p className="text-[10px] font-bold italic leading-relaxed text-zinc-500">{item.body}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[10px] leading-relaxed text-zinc-600">
+            No timeline rows are available yet. The app will show real scan and device-state events here once they exist.
+          </p>
+        )}
       </section>
 
       <section className="rounded-2xl border border-cyan-500/12 bg-[rgba(22,22,22,0.68)] p-4 backdrop-blur-md">

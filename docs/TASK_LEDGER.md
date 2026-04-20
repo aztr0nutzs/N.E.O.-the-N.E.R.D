@@ -180,3 +180,31 @@ Branch: task/assistant-intelligence
 - No MAC/vendor inference
 - No Wake-on-LAN execution
 - No real suspicious-device detection yet
+
+## Task — History / Alerts / Change Timeline
+Date: 2026-04-19
+Owner Agent: Codex
+Branch: task/history-alerts-timeline
+
+### Files changed
+- src/lib/network/changeTimeline.ts
+- src/lib/network/index.ts
+- src/lib/network/assistantIntelligence.ts
+- src/components/AssistantCommandCenterScreen.tsx
+- src/components/mission/NerdDeviceDiscoveryMission.tsx
+
+### Verified outcomes
+- Canonical timeline layer added over real Supabase-backed data
+- Recent ScanSnapshot and DeviceEvent rows are merged into a sorted timeline
+- Truthful alert categories added without fake severity/risk scoring
+- Assistant can answer recent-change / history / review prompts from real stored state
+- Assistant command center shows timeline/review cards
+- Discovery screen shows recent changes section
+- npm ci passed
+- npm run lint passed
+- npm run build passed
+
+### Honest limitations
+- No malicious/suspicious-device inference
+- No offline/online claims without explicit events
+- No fabricated action/device history

@@ -39,6 +39,12 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function formatTimelineTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
 /**
  * Assistant command center — visual fidelity from nerd_assistant_command_center.html.
  * Controls are wired to real destinations or explicitly marked unavailable / decorative.
@@ -378,6 +384,29 @@ export function AssistantCommandCenterScreen({
               </div>
               <p className="text-[10px] leading-relaxed text-zinc-400">{networkIntel.networkSummaryText}</p>
               <p className="text-[10px] leading-relaxed text-zinc-500">{networkIntel.changeSummaryText}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <IntelMetric label="Timeline" value={networkIntel.timeline.items.length} />
+                <IntelMetric label="Review" value={networkIntel.timeline.attentionItems.length} />
+              </div>
+              {networkIntel.timeline.items.length > 0 ? (
+                <div className="space-y-2">
+                  {networkIntel.timeline.items.slice(0, 3).map((item) => (
+                    <div key={item.id} className="rounded-xl border border-orange-400/10 bg-black/35 px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-black italic uppercase tracking-[0.1rem] text-orange-200">
+                          {item.title}
+                        </span>
+                        <span className="shrink-0 text-[8px] font-black uppercase tracking-[0.1rem] text-zinc-600">
+                          {formatTimelineTime(item.occurredAt)}
+                        </span>
+                      </div>
+                      <div className="text-[10px] font-bold italic leading-relaxed text-zinc-500">{item.body}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[10px] text-zinc-600">No scan snapshots or device events are stored yet.</p>
+              )}
               {networkIntel.recommendations.length > 0 ? (
                 <div className="space-y-2">
                   {networkIntel.recommendations.slice(0, 3).map((rec) => (

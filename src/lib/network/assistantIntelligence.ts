@@ -1,9 +1,10 @@
 import { listDevices } from './devicesRepository';
-import { listRecentDeviceEvents } from './eventsRepository';
+import { fetchNetworkTimeline } from './changeTimeline';
 import { fetchNetworkSummary } from './networkSummary';
 import { getLastScanSnapshot } from './scansRepository';
 import { evaluatePlatformCapabilities } from './scanService';
 import type { PlatformCapabilities } from './scanService';
+import type { NetworkTimelineSummary } from './changeTimeline';
 import type {
   DeviceActionType,
   DeviceEvent,
@@ -13,6 +14,7 @@ import type {
 } from './types';
 
 const RECENT_EVENT_LIMIT = 12;
+const TIMELINE_ITEM_LIMIT = 18;
 const MAX_RECOMMENDATIONS = 6;
 const MAX_DEVICE_BRIEFS = 5;
 
@@ -54,6 +56,7 @@ export interface AssistantNetworkIntel {
   deviceBriefs: AssistantDeviceBrief[];
   lastScan: ScanSnapshot | null;
   recentEvents: DeviceEvent[];
+  timeline: NetworkTimelineSummary;
   capabilities: PlatformCapabilities;
   headline: string;
   networkSummaryText: string;
@@ -183,12 +186,6 @@ function buildDeviceBrief(device: DeviceRecord): AssistantDeviceBrief {
   };
 }
 
-function eventPhrase(event: DeviceEvent): string {
-  const when = formatTime(event.createdAt);
-  const message = event.message ? `: ${event.message}` : '';
-  return `${when} - ${event.eventType}${message}`;
-}
-
 function buildNetworkSummaryText(summary: NetworkSummary, lastScan: ScanSnapshot | null): string {
   const scanText = lastScan
     ? `${lastScan.status} scan at ${formatTime(lastScan.finishedAt ?? lastScan.startedAt)}`
@@ -201,15 +198,20 @@ function buildNetworkSummaryText(summary: NetworkSummary, lastScan: ScanSnapshot
   ].join(' ');
 }
 
-function buildChangeSummaryText(recentEvents: readonly DeviceEvent[], summary: NetworkSummary): string {
-  if (recentEvents.length === 0) {
+function buildChangeSummaryText(timeline: NetworkTimelineSummary, summary: NetworkSummary): string {
+  if (timeline.items.length === 0) {
     return summary.totalDevices === 0
-      ? 'No device or scan events are stored yet.'
-      : 'No recent device or scan events are stored.';
+      ? 'No scan snapshots or device events are stored yet.'
+      : 'No recent scan snapshots or device events are stored.';
   }
 
-  const topEvents = recentEvents.slice(0, 4).map(eventPhrase);
-  return `Recent changes: ${topEvents.join(' | ')}`;
+  const topItems = timeline.items
+    .slice(0, 4)
+    .map((item) => `${formatTime(item.occurredAt)} - ${item.title}: ${item.body}`);
+  const attentionText = timeline.attentionItems.length > 0
+    ? `${timeline.attentionItems.length} item(s) deserve review. `
+    : '';
+  return `Recent changes: ${attentionText}${topItems.join(' | ')}`;
 }
 
 function buildLimitations(capabilities: PlatformCapabilities, lastScan: ScanSnapshot | null): string[] {
@@ -235,8 +237,21 @@ function buildRecommendations(
   devices: readonly DeviceRecord[],
   lastScan: ScanSnapshot | null,
   limitations: readonly string[],
+  timeline: NetworkTimelineSummary,
 ): AssistantRecommendation[] {
   const recommendations: AssistantRecommendation[] = [];
+
+  if (timeline.attentionItems.length > 0) {
+    const latest = timeline.attentionItems[0];
+    recommendations.push({
+      id: `review-${latest.sourceId}`,
+      priority: 'normal',
+      title: 'Review recent network changes',
+      body: `${latest.title}: ${latest.body}`,
+      actionType: 'review_limits',
+      deviceId: latest.deviceId ?? undefined,
+    });
+  }
 
   if (!lastScan) {
     recommendations.push({
@@ -322,15 +337,16 @@ export async function fetchAssistantNetworkIntel(userId: string): Promise<Assist
     throw new Error('assistant network intelligence requires an authenticated user id');
   }
 
-  const [summary, devices, lastScan, recentEvents] = await Promise.all([
+  const [summary, devices, lastScan, timeline] = await Promise.all([
     fetchNetworkSummary(userId),
     listDevices(userId),
     getLastScanSnapshot(userId),
-    listRecentDeviceEvents(userId, { limit: RECENT_EVENT_LIMIT }),
+    fetchNetworkTimeline(userId, { limit: TIMELINE_ITEM_LIMIT, eventLimit: RECENT_EVENT_LIMIT }),
   ]);
+  const recentEvents = timeline.recentEvents;
   const capabilities = evaluatePlatformCapabilities();
   const limitationNotes = buildLimitations(capabilities, lastScan);
-  const recommendations = buildRecommendations(summary, devices, lastScan, limitationNotes);
+  const recommendations = buildRecommendations(summary, devices, lastScan, limitationNotes, timeline);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -339,13 +355,14 @@ export async function fetchAssistantNetworkIntel(userId: string): Promise<Assist
     deviceBriefs: devices.slice(0, MAX_DEVICE_BRIEFS).map(buildDeviceBrief),
     lastScan,
     recentEvents,
+    timeline,
     capabilities,
     headline:
       summary.totalDevices === 0
         ? 'No stored device inventory yet.'
         : `${summary.totalDevices} stored device(s), ${summary.unclassifiedDevices} unclassified.`,
     networkSummaryText: buildNetworkSummaryText(summary, lastScan),
-    changeSummaryText: buildChangeSummaryText(recentEvents, summary),
+    changeSummaryText: buildChangeSummaryText(timeline, summary),
     limitationNotes,
     recommendations,
   };
@@ -354,7 +371,14 @@ export async function fetchAssistantNetworkIntel(userId: string): Promise<Assist
 export function formatAssistantNetworkResponse(intel: AssistantNetworkIntel, prompt = ''): string {
   const lower = prompt.toLowerCase();
   const wantsLimits = lower.includes('limit') || lower.includes('cannot') || lower.includes("can't");
-  const wantsChanges = lower.includes('change') || lower.includes('recent') || lower.includes('event');
+  const wantsChanges =
+    lower.includes('change')
+    || lower.includes('recent')
+    || lower.includes('event')
+    || lower.includes('alert')
+    || lower.includes('history')
+    || lower.includes('timeline')
+    || lower.includes('review');
   const wantsActions = lower.includes('recommend') || lower.includes('action') || lower.includes('next');
   const wantsDevices = lower.includes('device') || lower.includes('host');
 
@@ -364,6 +388,16 @@ export function formatAssistantNetworkResponse(intel: AssistantNetworkIntel, pro
 
   if (wantsChanges || !prompt) {
     sections.push(intel.changeSummaryText);
+    if (intel.timeline.attentionItems.length > 0) {
+      sections.push(
+        `Review items: ${intel.timeline.attentionItems
+          .slice(0, 4)
+          .map((item) => `${item.title}: ${item.body}`)
+          .join(' ')}`,
+      );
+    } else {
+      sections.push('Review items: no recent attention-worthy changes are stored.');
+    }
   }
 
   if (wantsDevices && intel.deviceBriefs.length > 0) {
@@ -403,5 +437,16 @@ export function isNetworkAssistantPrompt(prompt: string): boolean {
     'wake on lan',
     'port',
     'ping',
+    'alert',
+    'alerts',
+    'history',
+    'timeline',
+    'recent',
+    'change',
+    'changed',
+    'favorite',
+    'trusted',
+    'ignored',
+    'review',
   ].some((keyword) => normalized.includes(keyword));
 }

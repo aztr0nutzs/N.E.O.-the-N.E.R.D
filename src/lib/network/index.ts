@@ -98,3 +98,14 @@ export {
   formatAssistantNetworkResponse,
   isNetworkAssistantPrompt,
 } from './assistantIntelligence';
+
+export type {
+  FetchNetworkTimelineOptions,
+  NetworkAlertCategory,
+  NetworkAttentionState,
+  NetworkTimelineItem,
+  NetworkTimelineSourceType,
+  NetworkTimelineSummary,
+} from './changeTimeline';
+
+export { fetchNetworkTimeline } from './changeTimeline';
