@@ -76,3 +76,23 @@ Branch: cursor/real-settings-hud-c601
 - Settings still opened from right panel; panel title “Operator Settings”.
 - `neoHudSettings` + existing `aiSettings` persist to localStorage.
 - npm ci / lint / build passed
+
+## Task — Screen Integration Verification Gate
+Date: 2026-04-19
+Owner Agent: Codex
+Branch: cursor/neo-nerd-screens-integration-9bf0
+
+### Verified
+- Login screen active and wired to real auth
+- MissionShell screens integrated and reachable
+- Chat/robot/control layout fix preserved
+- Settings persistence preserved
+- No reintroduced fake controls
+- npm ci passed
+- npm run lint passed
+- npm run build passed
+- npx cap sync android passed
+
+### External environment blocker
+- gradlew assembleDebug blocked by missing Android SDK configuration on this machine
+- not an app regression
