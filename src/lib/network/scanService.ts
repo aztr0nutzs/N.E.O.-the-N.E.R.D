@@ -99,8 +99,14 @@ export function evaluatePlatformCapabilities(): PlatformCapabilities {
     'Browser and WebView sandboxes cannot enumerate arbitrary LAN hosts, ARP tables, Wi-Fi neighbors, MAC addresses, or vendor OUIs.',
   ];
 
-  if (runtime === 'capacitor' && platform === 'android' && !hasNativeLanScanner) {
-    limitationNotes.push('Capacitor Android is active, but this build exposes no native LAN scanner plugin.');
+  if (runtime === 'capacitor' && platform === 'android') {
+    if (hasNativeLanScanner) {
+      limitationNotes.push(
+        'Native Android discovery performs bounded reachability probing plus local interface/gateway context; it does not guarantee MAC addresses, vendor OUIs, ARP tables, or Wi-Fi neighbor visibility.',
+      );
+    } else {
+      limitationNotes.push('Capacitor Android is active, but this build exposes no native LAN scanner plugin.');
+    }
   }
 
   if (!hasNetworkInformationApi) {
@@ -114,9 +120,9 @@ export function evaluatePlatformCapabilities(): PlatformCapabilities {
   limitationNotes.push('This MVP records real browser-visible probes and known inventory only; it does not synthesize devices.');
 
   const canEnumerateLanDevices = discoveryAvailability.useNativeAndroidDiscoveryPath;
-  const canReadMacAddresses = discoveryAvailability.useNativeAndroidDiscoveryPath;
-  const canReadArpTable = discoveryAvailability.useNativeAndroidDiscoveryPath;
-  const canReadWifiNeighbors = discoveryAvailability.useNativeAndroidDiscoveryPath;
+  const canReadMacAddresses = false;
+  const canReadArpTable = false;
+  const canReadWifiNeighbors = false;
 
   return {
     runtime,
