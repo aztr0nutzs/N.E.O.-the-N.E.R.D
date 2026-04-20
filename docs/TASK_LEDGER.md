@@ -152,3 +152,31 @@ Branch: task/device-actions-mvp
 - No raw TCP scan in browser/WebView
 - No Wake-on-LAN without native/server support
 - Admin URL opening cannot guarantee the target is really a router/admin panel
+
+## Task — Assistant Intelligence Layer
+Date: 2026-04-19
+Owner Agent: Codex
+Branch: task/assistant-intelligence
+
+### Files changed
+- src/lib/network/assistantIntelligence.ts
+- src/lib/network/index.ts
+- src/components/AssistantCommandCenterScreen.tsx
+- src/components/ChatInterface.tsx
+
+### Verified outcomes
+- Assistant now summarizes real known device/network state
+- Assistant explains scan status and recent events truthfully
+- Assistant generates grounded next-action recommendations
+- Chat intercepts network/device prompts and answers from real stored state before remote AI
+- No fake risk scoring or fake suspicious-device claims introduced
+- npm ci passed
+- npm run lint passed
+- npm run build passed
+
+### Honest limitations
+- No broad LAN discovery yet
+- No ICMP/raw TCP
+- No MAC/vendor inference
+- No Wake-on-LAN execution
+- No real suspicious-device detection yet

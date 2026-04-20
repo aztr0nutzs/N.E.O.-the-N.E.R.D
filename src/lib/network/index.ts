@@ -85,3 +85,16 @@ export {
   updateDeviceNotesAction,
   wakeDevice,
 } from './deviceActions';
+
+export type {
+  AssistantDeviceBrief,
+  AssistantNetworkIntel,
+  AssistantRecommendation,
+  AssistantRecommendationPriority,
+} from './assistantIntelligence';
+
+export {
+  fetchAssistantNetworkIntel,
+  formatAssistantNetworkResponse,
+  isNetworkAssistantPrompt,
+} from './assistantIntelligence';

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Activity,
@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { useNeuralAuth, useNeuralRealtime, useNeuralSystem, useNeuralUi } from '../context/NeuralContext';
+import { fetchAssistantNetworkIntel, type AssistantNetworkIntel } from '../lib/network';
 
 export interface AssistantCommandCenterScreenProps {
   /** When true, sits inside MissionShell (no fixed fullscreen / no duplicate close control). */
@@ -33,6 +34,10 @@ export interface AssistantCommandCenterScreenProps {
 }
 
 type UiMode = 'text' | 'voice' | 'agent';
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 /**
  * Assistant command center — visual fidelity from nerd_assistant_command_center.html.
@@ -55,6 +60,9 @@ export function AssistantCommandCenterScreen({
   const { currentModel, neuralSurge, effectiveHudMotionScale } = useNeuralUi();
   const [uiMode, setUiMode] = useState<UiMode>('text');
   const [readoutTick, setReadoutTick] = useState(0);
+  const [networkIntel, setNetworkIntel] = useState<AssistantNetworkIntel | null>(null);
+  const [networkIntelLoading, setNetworkIntelLoading] = useState(false);
+  const [networkIntelError, setNetworkIntelError] = useState<string | null>(null);
 
   const motionPct = useMemo(() => {
     const mag = Math.hypot(userPosition.x, userPosition.y);
@@ -85,6 +93,28 @@ export function AssistantCommandCenterScreen({
   const syncReadout = useCallback(() => {
     setReadoutTick((t) => t + 1);
   }, []);
+
+  const loadNetworkIntel = useCallback(async () => {
+    if (!user) {
+      setNetworkIntel(null);
+      setNetworkIntelError(null);
+      return;
+    }
+
+    setNetworkIntelLoading(true);
+    setNetworkIntelError(null);
+    try {
+      setNetworkIntel(await fetchAssistantNetworkIntel(user.id));
+    } catch (error) {
+      setNetworkIntelError(getErrorMessage(error));
+    } finally {
+      setNetworkIntelLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    void loadNetworkIntel();
+  }, [loadNetworkIntel]);
 
   const voiceBarsActive = isSystemsReady && isListening;
 
@@ -296,18 +326,77 @@ export function AssistantCommandCenterScreen({
             </div>
             <div className="space-y-2">
               <PipelineRow label="Browser link" value={online ? 'Up' : 'Down'} ok={online} />
+              <PipelineRow
+                label="Stored devices"
+                value={networkIntel ? String(networkIntel.summary.totalDevices) : user ? '...' : 'N/A'}
+                ok={Boolean(networkIntel && networkIntel.summary.totalDevices > 0)}
+              />
               <p className="text-[9px] font-bold italic leading-relaxed text-zinc-500">
-                LAN / device graph: <span className="text-zinc-400">not shipped</span> — no host rows synced yet.
+                LAN / device graph: <span className="text-zinc-400">stored rows</span> only — not full LAN coverage.
               </p>
               <p className="text-[9px] font-bold italic leading-relaxed text-zinc-500">
-                Deep scan engine: <span className="text-zinc-400">unavailable</span> in this web client (needs native or
-                server runner).
+                Last scan: <span className="text-zinc-400">{networkIntel?.lastScan?.status ?? 'none'}</span> — browser-safe scope.
               </p>
             </div>
             <p className="mt-2 text-[10px] font-bold italic text-zinc-500">
-              No fake progress — only link status is live; discovery backend is future work.
+              No fake progress — assistant network data is read from Supabase rows and current capability checks.
             </p>
           </div>
+        </section>
+
+        <section className="mb-4 rounded-2xl border border-[rgba(114,220,255,0.12)] bg-[rgba(12,12,14,0.85)] p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-black italic uppercase tracking-[0.14rem] text-white">Network intelligence</h2>
+              <p className="text-[10px] font-bold italic text-zinc-500">Assistant-facing summary from stored devices, scans, and events.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                syncReadout();
+                void loadNetworkIntel();
+              }}
+              className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-[10px] font-black italic uppercase tracking-[0.12rem] text-cyan-400"
+              title="Refresh assistant network intelligence from Supabase-backed rows"
+            >
+              Refresh
+            </button>
+          </div>
+          {networkIntelLoading && !networkIntel ? (
+            <p className="text-[10px] font-bold italic text-zinc-500">Loading stored network intelligence...</p>
+          ) : networkIntelError ? (
+            <p className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-[10px] text-red-100">
+              {networkIntelError}
+            </p>
+          ) : networkIntel ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-4 gap-2">
+                <IntelMetric label="Known" value={networkIntel.summary.totalDevices} />
+                <IntelMetric label="Trusted" value={networkIntel.summary.trustedDevices} />
+                <IntelMetric label="Favorite" value={networkIntel.summary.favoriteDevices} />
+                <IntelMetric label="Ignored" value={networkIntel.summary.ignoredDevices} />
+              </div>
+              <p className="text-[10px] leading-relaxed text-zinc-400">{networkIntel.networkSummaryText}</p>
+              <p className="text-[10px] leading-relaxed text-zinc-500">{networkIntel.changeSummaryText}</p>
+              {networkIntel.recommendations.length > 0 ? (
+                <div className="space-y-2">
+                  {networkIntel.recommendations.slice(0, 3).map((rec) => (
+                    <div key={rec.id} className="rounded-xl border border-cyan-500/10 bg-black/40 px-3 py-2">
+                      <div className="text-[10px] font-black italic uppercase tracking-[0.1rem] text-cyan-300">{rec.title}</div>
+                      <div className="text-[10px] font-bold italic leading-relaxed text-zinc-500">{rec.body}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[10px] text-zinc-600">No action recommendation is available until device or scan data exists.</p>
+              )}
+              <p className="rounded-lg border border-orange-500/15 bg-orange-500/5 px-3 py-2 text-[10px] leading-relaxed text-orange-100/80">
+                Limit: {networkIntel.limitationNotes[0]}
+              </p>
+            </div>
+          ) : (
+            <p className="text-[10px] font-bold italic text-zinc-500">Sign in to load Supabase-backed network intelligence.</p>
+          )}
         </section>
 
         <section className="relative mb-4 rounded-2xl border border-cyan-500/25 bg-black/45 p-4">
@@ -516,6 +605,15 @@ function PipelineRow({ label, value, ok }: { label: string; value: string; ok: b
       <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
         <div className={`h-full ${ok ? 'w-full bg-cyan-400' : 'w-full bg-red-500/70'}`} />
       </div>
+    </div>
+  );
+}
+
+function IntelMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-cyan-500/10 bg-black/45 px-2 py-2 text-center">
+      <div className="text-lg font-black italic text-cyan-100">{value}</div>
+      <div className="text-[8px] font-black uppercase tracking-[0.12rem] text-zinc-500">{label}</div>
     </div>
   );
 }

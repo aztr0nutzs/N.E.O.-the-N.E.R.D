@@ -4,6 +4,11 @@ import { Send, Terminal, Image as ImageIcon, Search, MapPin, Brain, Zap, Video, 
 import { fetchProtectedJson, getClientSafeMessage, handleDatabaseAccessError, OperationType } from '../authClient';
 import { Persona, useNeuralAuth, useNeuralSystem, useNeuralUi } from '../context/NeuralContext';
 import { supabase } from '../lib/supabase';
+import {
+  fetchAssistantNetworkIntel,
+  formatAssistantNetworkResponse,
+  isNetworkAssistantPrompt,
+} from '../lib/network';
 
 interface Message {
   id?: string;
@@ -496,6 +501,28 @@ export function ChatInterface({
         setMessages(prev =>
           prev.map((m, i) => (i === prev.length - 1 && m.role === 'user' && !m.id ? { ...m, id: userSave.id } : m))
         );
+      }
+
+      if ((mode === 'standard' || mode === 'think' || mode === 'fast') && isNetworkAssistantPrompt(userMessage)) {
+        const intel = await fetchAssistantNetworkIntel(userId);
+        if (!isRequestCurrent(requestVersion)) return;
+
+        const networkResponse = formatAssistantNetworkResponse(intel, userMessage);
+        const networkAssistantMsg: Message = {
+          role: 'assistant',
+          content: networkResponse,
+        };
+
+        setMessages(prev => [...prev, networkAssistantMsg]);
+        const networkSave = await saveMessage(networkAssistantMsg);
+        if (networkSave.id) {
+          setMessages(prev =>
+            prev.map((m, i) =>
+              i === prev.length - 1 && m.role === 'assistant' && !m.id ? { ...m, id: networkSave.id } : m
+            )
+          );
+        }
+        return;
       }
 
       let responseText = '';
