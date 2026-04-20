@@ -109,6 +109,47 @@ export interface DeviceRecord {
   metadata: Record<string, unknown>;
 }
 
+/**
+ * Where an observation entered the pipeline (browser probes vs native bridge).
+ * Stored under `metadata` for auditability and assistant grounding.
+ */
+export type DiscoverySourceKind = 'browser_safe' | 'native_android';
+
+/**
+ * Optional per-field provenance when a native layer can prove some fields but not others.
+ */
+export type ObservationField =
+  | 'ipAddress'
+  | 'macAddress'
+  | 'hostname'
+  | 'vendor'
+  | 'deviceType'
+  | 'status';
+
+/** How a field was obtained; `absent` means the field was not reported by the source. */
+export type FieldProvenanceState = 'reported' | 'inferred' | 'absent';
+
+/**
+ * Wire-format from a future Android native discovery implementation (ARP/neighbor/scan).
+ * Must not be persisted directly — normalize to {@link DeviceObservationInput} first.
+ */
+export interface NativeDeviceObservation {
+  /** Idempotency hint for deduplication within a batch (native-generated, optional). */
+  nativeObservationId?: string;
+  ipAddress: string;
+  observedAt?: string;
+  macAddress?: string | null;
+  hostname?: string | null;
+  vendor?: string | null;
+  deviceType?: DeviceCategory | null;
+  status?: DeviceStatus;
+  /**
+   * Optional structured provenance from native code (never manufactured in JS).
+   */
+  fieldProvenance?: Partial<Record<ObservationField, FieldProvenanceState>>;
+  metadata?: Record<string, unknown>;
+}
+
 /** Observation payload passed into {@link upsertDeviceFromObservation}. */
 export interface DeviceObservationInput {
   ipAddress: string;

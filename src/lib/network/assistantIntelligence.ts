@@ -2,8 +2,8 @@ import { listDevices } from './devicesRepository';
 import { fetchNetworkTimeline } from './changeTimeline';
 import { fetchNetworkSummary } from './networkSummary';
 import { getLastScanSnapshot } from './scansRepository';
+import type { PlatformCapabilities } from './scanTypes';
 import { evaluatePlatformCapabilities } from './scanService';
-import type { PlatformCapabilities } from './scanService';
 import type { NetworkTimelineSummary } from './changeTimeline';
 import type {
   DeviceActionType,
