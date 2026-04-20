@@ -16,6 +16,8 @@ import {
 import { useNeuralAuth, useNeuralRealtime, useNeuralSystem, useNeuralUi } from '../context/NeuralContext';
 
 export interface AssistantCommandCenterScreenProps {
+  /** When true, sits inside MissionShell (no fixed fullscreen / no duplicate close control). */
+  embedded?: boolean;
   onClose: () => void;
   onExpandChat: () => void;
   onOpenMissionLogs: () => void;
@@ -31,6 +33,7 @@ export interface AssistantCommandCenterScreenProps {
  * every control maps to an existing in-app destination or is explicitly labeled decorative.
  */
 export function AssistantCommandCenterScreen({
+  embedded = false,
   onClose,
   onExpandChat,
   onOpenMissionLogs,
@@ -64,7 +67,11 @@ export function AssistantCommandCenterScreen({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="absolute inset-0 z-[120] flex flex-col bg-[#030506] text-white font-mono overflow-hidden"
+      className={
+        embedded
+          ? 'relative z-10 flex h-full min-h-0 flex-col overflow-hidden bg-[#030506] font-mono text-white'
+          : 'absolute inset-0 z-[120] flex flex-col overflow-hidden bg-[#030506] font-mono text-white'
+      }
       role="dialog"
       aria-modal="true"
       aria-label="Assistant command center"
@@ -83,14 +90,16 @@ export function AssistantCommandCenterScreen({
             (only after sensors are armed).
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="shrink-0 p-2 rounded-full border border-white/15 bg-black/50 text-gray-300 hover:text-white hover:border-cyan-400/40 transition-colors"
-          aria-label="Close command center"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        {!embedded && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-full border border-white/15 bg-black/50 p-2 text-gray-300 transition-colors hover:border-cyan-400/40 hover:text-white"
+            aria-label="Close command center"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
       </header>
 
       <div className="relative z-10 flex-1 overflow-y-auto custom-scrollbar px-4 py-4 space-y-5 pb-8">
@@ -172,7 +181,11 @@ export function AssistantCommandCenterScreen({
           <div className="grid grid-cols-2 gap-2">
             <ActionButton icon={<MessageSquare className="w-4 h-4" />} label="Open chat" onClick={onExpandChat} />
             <ActionButton icon={<ScrollText className="w-4 h-4" />} label="Mission logs" onClick={onOpenMissionLogs} />
-            <ActionButton icon={<Wifi className="w-4 h-4" />} label="Network intel" onClick={onOpenNetwork} />
+            <ActionButton
+              icon={<Wifi className="w-4 h-4" />}
+              label={embedded ? 'Discovery tab' : 'Network intel'}
+              onClick={onOpenNetwork}
+            />
             <ActionButton icon={<Settings className="w-4 h-4" />} label="Operator matrix" onClick={onOpenSettings} />
             <ActionButton icon={<Shield className="w-4 h-4" />} label="Diagnostics" onClick={onOpenDiagnostics} />
             <ActionButton icon={<SlidersHorizontal className="w-4 h-4" />} label="Environmental" onClick={onOpenSensors} />

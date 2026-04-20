@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Wifi, Battery, Shield, Zap, Cpu, Activity, Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNeuralSystem } from '../context/NeuralContext';
@@ -22,6 +22,20 @@ export function BottomDock({
   onCommandCenterClick,
 }: BottomDockActions) {
   const { isSystemsReady, isListening, toggleListening, lastTranscript } = useNeuralSystem();
+  const [browserOnline, setBrowserOnline] = useState(
+    () => typeof navigator !== 'undefined' && navigator.onLine
+  );
+
+  useEffect(() => {
+    const on = () => setBrowserOnline(true);
+    const off = () => setBrowserOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, []);
 
   interface Slot {
     icon: React.ReactNode;
@@ -59,8 +73,8 @@ export function BottomDock({
       icon: <Wifi className="w-5 h-5" />,
       color: 'green',
       label: 'LINK',
-      title: 'Browser network status (online / Network Information API)',
-      active: isSystemsReady,
+      title: 'Mission discovery + browser network status',
+      active: browserOnline,
       onClick: onNetworkClick,
     },
     {
@@ -92,7 +106,7 @@ export function BottomDock({
       icon: <Activity className="w-5 h-5" />,
       color: 'magenta',
       label: 'SYNC',
-      title: 'Open AI configuration',
+      title: 'Operator settings matrix (mission hub)',
       active: true,
       onClick: onSettingsClick,
     },

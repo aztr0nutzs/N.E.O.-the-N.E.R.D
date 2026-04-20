@@ -100,9 +100,16 @@ interface ChatInterfaceProps {
   minimized?: boolean;
   onToggleMinimized?: () => void;
   onOpenSettings?: () => void;
+  /** Opens unified mission shell on the Assistant tab (command center). */
+  onOpenAssistantMission?: () => void;
 }
 
-export function ChatInterface({ minimized = false, onToggleMinimized, onOpenSettings }: ChatInterfaceProps = {}) {
+export function ChatInterface({
+  minimized = false,
+  onToggleMinimized,
+  onOpenSettings,
+  onOpenAssistantMission,
+}: ChatInterfaceProps = {}) {
   const { user } = useNeuralAuth();
   const { isListening, toggleListening, lastTranscript } = useNeuralSystem();
   const { setNeuralSurge, aiSettings, setCurrentModel } = useNeuralUi();
@@ -760,6 +767,17 @@ export function ChatInterface({ minimized = false, onToggleMinimized, onOpenSett
           <button onClick={clearHistory} className="text-gray-500 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 rounded-sm p-1 transition-all" title="Clear History">
             <Trash2 className="w-3 h-3" />
           </button>
+          {onOpenAssistantMission && (
+            <button
+              type="button"
+              onClick={onOpenAssistantMission}
+              className="rounded-sm border border-transparent p-1 text-gray-500 transition-all hover:border-cyan-500/30 hover:bg-cyan-500/10 hover:text-cyan-300"
+              title="Assistant mission hub (command center)"
+              aria-label="Open assistant mission hub"
+            >
+              <Brain className="h-3 w-3" />
+            </button>
+          )}
           {onOpenSettings && (
             <button
               type="button"

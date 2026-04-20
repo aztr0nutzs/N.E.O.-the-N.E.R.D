@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>N.E.R.D. | System Settings Matrix</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            'surface-container-lowest': '#000000',
+            'surface-container-low': '#131313',
+            'surface-container': '#191919',
+            'surface-container-high': '#1f1f1f',
+            primary: '#72dcff',
+            secondary: '#2ff801',
+            tertiary: '#ff51fa',
+            error: '#ff716c'
+          },
+          fontFamily: { body: ['Space Grotesk'] }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      min-height: max(884px, 100dvh);
+      background:
+        radial-gradient(circle at 18% 14%, rgba(255,81,250,.10), transparent 24%),
+        radial-gradient(circle at 82% 20%, rgba(0,210,255,.10), transparent 20%),
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(180deg, #090909, #000000 60%, #040404);
+      background-size: auto, auto, 24px 24px, 24px 24px, auto;
+      overflow-x: hidden;
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+    }
+    .glass-panel {
+      background: rgba(20, 20, 20, 0.72);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(114,220,255,0.12);
+    }
+    .toggle-dot.on { transform: translateX(20px); }
+    .option-chip.active { border-color: rgba(255,81,250,.42); color: #ff51fa; box-shadow: inset 0 0 14px rgba(255,81,250,.18), 0 0 14px rgba(255,81,250,.10); }
+    .range-track::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 9999px;
+      background: #72dcff;
+      border: 2px solid rgba(0,0,0,.5);
+      box-shadow: 0 0 12px rgba(114,220,255,.55);
+      cursor: pointer;
+    }
+    .range-track::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 9999px;
+      background: #72dcff;
+      border: 2px solid rgba(0,0,0,.5);
+      box-shadow: 0 0 12px rgba(114,220,255,.55);
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body class="bg-surface-container-lowest text-white selection:bg-primary selection:text-black">
+  <header class="fixed top-0 left-0 right-0 z-50 h-16 border-b border-cyan-500/20 bg-black/85 backdrop-blur-xl px-5 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="material-symbols-outlined text-fuchsia-400">tune</span>
+      <div>
+        <h1 class="text-xl font-black italic uppercase tracking-[0.18rem] text-cyan-400 drop-shadow-[0_0_10px_rgba(0,210,255,0.65)]">Settings Matrix</h1>
+        <p class="text-[9px] uppercase tracking-[0.2rem] text-zinc-500 font-bold">Relevant system control shell</p>
+      </div>
+    </div>
+    <button id="save-config" class="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-[10px] font-black italic uppercase tracking-[0.14rem] text-cyan-400 active:scale-95">Save Preset</button>
+  </header>
+
+  <main class="pt-20 pb-28 px-4 max-w-md mx-auto space-y-4">
+    <section class="glass-panel rounded-2xl p-4 space-y-3">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-black italic uppercase tracking-[0.14rem] text-white">Visual Theme Profile</h2>
+          <p class="text-[10px] font-bold italic text-zinc-500">Theme group for your assistant/network shell instead of pointless fake toggles.</p>
+        </div>
+        <span id="theme-label" class="rounded-lg border border-fuchsia-500/25 bg-fuchsia-500/10 px-2 py-1 text-[9px] font-black italic uppercase tracking-[0.12rem] text-fuchsia-400">Cyber HUD</span>
+      </div>
+      <div class="grid grid-cols-3 gap-2">
+        <button class="option-chip active rounded-xl border border-fuchsia-500/25 bg-fuchsia-500/10 px-2 py-3 text-[10px] font-black italic uppercase tracking-[0.12rem]" data-theme="Cyber HUD">Cyber HUD</button>
+        <button class="option-chip rounded-xl border border-zinc-700 bg-zinc-900/70 px-2 py-3 text-[10px] font-black italic uppercase tracking-[0.12rem] text-zinc-400" data-theme="Stealth Lime">Stealth Lime</button>
+        <button class="option-chip rounded-xl border border-zinc-700 bg-zinc-900/70 px-2 py-3 text-[10px] font-black italic uppercase tracking-[0.12rem] text-zinc-400" data-theme="Mag Core">Mag Core</button>
+      </div>
+      <div class="rounded-2xl border border-cyan-500/12 bg-black/45 p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] font-black italic uppercase tracking-[0.12rem] text-cyan-400">HUD Intensity</span>
+          <span id="intensity-value" class="text-[10px] font-black italic uppercase tracking-[0.12rem] text-white">74%</span>
+        </div>
+        <input id="intensity-slider" class="range-track w-full h-2 appearance-none rounded-full bg-zinc-800" type="range" min="0" max="100" value="74" />
+      </div>
+    </section>
+
+    <section class="glass-panel rounded-2xl p-4 space-y-3">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-black italic uppercase tracking-[0.14rem] text-white">Discovery Defaults</h2>
+          <p class="text-[10px] font-bold italic text-zinc-500">Baseline scan behavior for the discovery screen.</p>
+        </div>
+        <span id="enabled-count" class="text-[9px] font-black italic uppercase tracking-[0.12rem] text-cyan-400">4 enabled</span>
+      </div>
+
+      <div class="space-y-3">
+        <div class="toggle-row flex items-center justify-between rounded-xl border border-zinc-800 bg-black/40 px-3 py-3" data-toggle="true">
+          <div>
+            <div class="text-[11px] font-black italic uppercase tracking-[0.1rem] text-cyan-400">ARP Sweep</div>
+            <div class="text-[10px] font-bold italic text-zinc-500">Fast subnet presence and MAC discovery.</div>
+          </div>
+          <button class="toggle-switch w-12 h-7 rounded-full bg-cyan-500/20 border border-cyan-500/40 px-1"><div class="toggle-dot on w-5 h-5 rounded-full bg-cyan-400 shadow-[0_0_12px_rgba(114,220,255,.7)] transition-transform"></div></button>
+        </div>
+        <div class="toggle-row flex items-center justify-between rounded-xl border border-zinc-800 bg-black/40 px-3 py-3" data-toggle="true">
+          <div>
+            <div class="text-[11px] font-black italic uppercase tracking-[0.1rem] text-lime-400">mDNS / SSDP</div>
+            <div class="text-[10px] font-bold italic text-zinc-500">Friendly names and media/service discovery.</div>
+          </div>
+          <button class="toggle-switch w-12 h-7 rounded-full bg-cyan-500/20 border border-cyan-500/40 px-1"><div class="toggle-dot on w-5 h-5 rounded-full bg-cyan-400 shadow-[0_0_12px_rgba(114,220,255,.7)] transition-transform"></div></button>
+        </div>
+        <div class="toggle-row flex items-center justify-between rounded-xl border border-zinc-800 bg-black/40 px-3 py-3" data-toggle="false">
+          <div>
+            <div class="text-[11px] font-black italic uppercase tracking-[0.1rem] text-fuchsia-400">Auto Quarantine</div>
+            <div class="text-[10px] font-bold italic text-zinc-500">Keep off unless the backend actually deserves that power.</div>
+          </div>
+          <button class="toggle-switch w-12 h-7 rounded-full bg-zinc-800 border border-zinc-700 px-1"><div class="toggle-dot w-5 h-5 rounded-full bg-zinc-400 transition-transform"></div></button>
+        </div>
+        <div class="toggle-row flex items-center justify-between rounded-xl border border-zinc-800 bg-black/40 px-3 py-3" data-toggle="true">
+          <div>
+            <div class="text-[11px] font-black italic uppercase tracking-[0.1rem] text-cyan-400">Vendor Inference</div>
+            <div class="text-[10px] font-bold italic text-zinc-500">Use MAC/OUI hints and service signatures.</div>
+          </div>
+          <button class="toggle-switch w-12 h-7 rounded-full bg-cyan-500/20 border border-cyan-500/40 px-1"><div class="toggle-dot on w-5 h-5 rounded-full bg-cyan-400 shadow-[0_0_12px_rgba(114,220,255,.7)] transition-transform"></div></button>
+        </div>
+        <div class="toggle-row flex items-center justify-between rounded-xl border border-zinc-800 bg-black/40 px-3 py-3" data-toggle="true">
+          <div>
+            <div class="text-[11px] font-black italic uppercase tracking-[0.1rem] text-lime-400">Speech Summaries</div>
+            <div class="text-[10px] font-bold italic text-zinc-500">Route summaries into assistant voice output.</div>
+          </div>
+          <button class="toggle-switch w-12 h-7 rounded-full bg-cyan-500/20 border border-cyan-500/40 px-1"><div class="toggle-dot on w-5 h-5 rounded-full bg-cyan-400 shadow-[0_0_12px_rgba(114,220,255,.7)] transition-transform"></div></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="glass-panel rounded-2xl p-4 space-y-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-black italic uppercase tracking-[0.14rem] text-white">Network Profiles</h2>
+          <p class="text-[10px] font-bold italic text-zinc-500">Preset shell for switching environment behavior.</p>
+        </div>
+        <span id="profile-label" class="rounded-lg border border-lime-400/25 bg-lime-400/10 px-2 py-1 text-[9px] font-black italic uppercase tracking-[0.12rem] text-lime-400">Home Lab</span>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <button class="profile-card rounded-2xl border border-lime-400/25 bg-lime-400/10 p-3 text-left" data-profile="Home Lab">
+          <div class="text-[11px] font-black italic uppercase tracking-[0.12rem] text-lime-400">Home Lab</div>
+          <div class="text-[10px] font-bold italic text-zinc-500">Balanced discovery and assistant narration.</div>
+        </button>
+        <button class="profile-card rounded-2xl border border-zinc-800 bg-black/40 p-3 text-left" data-profile="Travel Mode">
+          <div class="text-[11px] font-black italic uppercase tracking-[0.12rem] text-cyan-400">Travel Mode</div>
+          <div class="text-[10px] font-bold italic text-zinc-500">Reduced scans, cautious prompts, tight privacy.</div>
+        </button>
+        <button class="profile-card rounded-2xl border border-zinc-800 bg-black/40 p-3 text-left" data-profile="Diagnostics">
+          <div class="text-[11px] font-black italic uppercase tracking-[0.12rem] text-fuchsia-400">Diagnostics</div>
+          <div class="text-[10px] font-bold italic text-zinc-500">Aggressive telemetry and verbose runtime logs.</div>
+        </button>
+        <button class="profile-card rounded-2xl border border-zinc-800 bg-black/40 p-3 text-left" data-profile="Guest Safe">
+          <div class="text-[11px] font-black italic uppercase tracking-[0.12rem] text-cyan-400">Guest Safe</div>
+          <div class="text-[10px] font-bold italic text-zinc-500">Read-only shells and limited device actions.</div>
+        </button>
+      </div>
+    </section>
+
+    <section class="glass-panel rounded-2xl p-4 space-y-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-black italic uppercase tracking-[0.14rem] text-white">Permissions + Health</h2>
+          <p class="text-[10px] font-bold italic text-zinc-500">Useful status rows for eventual Android permission bridging.</p>
+        </div>
+        <span class="text-[9px] font-black italic uppercase tracking-[0.12rem] text-cyan-400">Ready to wire</span>
+      </div>
+      <div class="space-y-3">
+        <div class="rounded-xl border border-zinc-800 bg-black/40 p-3 flex items-center justify-between">
+          <div>
+            <div class="text-[11px] font-black italic uppercase tracking-[0.1rem] text-cyan-400">Microphone</div>
+            <div class="text-[10px] font-bold italic text-zinc-500">Voice assistant input path</div>
+          </div>
+          <span class="rounded-lg border border-lime-400/25 bg-lime-400/10 px-2 py-1 text-[9px] font-black italic uppercase tracking-[0.1rem] text-lime-400">Granted</span>
+        </div>
+        <div class="rounded-xl border border-zinc-800 bg-black/40 p-3 flex items-center justify-between">
+          <div>
+            <div class="text-[11px] font-black italic uppercase tracking-[0.1rem] text-cyan-400">Nearby Devices</div>
+            <div class="text-[10px] font-bold italic text-zinc-500">Bluetooth, LAN and service hints</div>
+          </div>
+          <span class="rounded-lg border border-lime-400/25 bg-lime-400/10 px-2 py-1 text-[9px] font-black italic uppercase tracking-[0.1rem] text-lime-400">Granted</span>
+        </div>
+        <div class="rounded-xl border border-zinc-800 bg-black/40 p-3 flex items-center justify-between">
+          <div>
+            <div class="text-[11px] font-black italic uppercase tracking-[0.1rem] text-cyan-400">Notifications</div>
+            <div class="text-[10px] font-bold italic text-zinc-500">Assistant alerts and scan summaries</div>
+          </div>
+          <span class="rounded-lg border border-fuchsia-500/25 bg-fuchsia-500/10 px-2 py-1 text-[9px] font-black italic uppercase tracking-[0.1rem] text-fuchsia-400">Review</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="glass-panel rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-black italic uppercase tracking-[0.14rem] text-white">Config Log</h2>
+        <span class="text-[9px] font-black italic uppercase tracking-[0.12rem] text-cyan-400">Session only</span>
+      </div>
+      <div id="config-log" class="rounded-xl border border-cyan-500/10 bg-black/50 p-3 font-mono text-[10px] space-y-2 max-h-44 overflow-auto">
+        <div class="flex gap-2"><span class="text-cyan-400">[09:38:03]</span><span class="text-zinc-300">THEME loaded: Cyber HUD.</span></div>
+        <div class="flex gap-2"><span class="text-lime-400">[09:38:05]</span><span class="text-zinc-300">PROFILE loaded: Home Lab.</span></div>
+        <div class="flex gap-2"><span class="text-fuchsia-400">[09:38:09]</span><span class="text-zinc-300">AUTO_QUARANTINE remains disabled pending backend safety rules.</span></div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="fixed bottom-0 left-0 right-0 z-50 h-20 px-3 bg-black/90 backdrop-blur-xl border-t border-cyan-500/20 rounded-t-2xl shadow-[0_-10px_30px_rgba(0,210,255,.06)] flex items-center justify-around">
+    <a href="nerd_assistant_command_center.html" class="flex flex-col items-center justify-center text-zinc-500 hover:text-cyan-400 transition-colors">
+      <span class="material-symbols-outlined text-xl">psychology</span>
+      <span class="mt-1 text-[10px] font-black italic uppercase tracking-[0.12rem]">Assistant</span>
+    </a>
+    <a href="nerd_device_discovery_mission_control.html" class="flex flex-col items-center justify-center text-zinc-500 hover:text-lime-400 transition-colors">
+      <span class="material-symbols-outlined text-xl">radar</span>
+      <span class="mt-1 text-[10px] font-black italic uppercase tracking-[0.12rem]">Discovery</span>
+    </a>
+    <a href="nerd_system_settings_matrix.html" class="flex flex-col items-center justify-center text-fuchsia-400 bg-fuchsia-500/10 rounded-xl py-1.5 px-3 shadow-[inset_0_0_12px_rgba(255,81,250,.18)]">
+      <span class="material-symbols-outlined text-xl" style="font-variation-settings:'FILL' 1">tune</span>
+      <span class="mt-1 text-[10px] font-black italic uppercase tracking-[0.12rem]">Settings</span>
+    </a>
+  </nav>
+
+  <script>
+    const log = document.getElementById('config-log');
+
+    function appendLog(color, msg) {
+      const row = document.createElement('div');
+      row.className = 'flex gap-2';
+      row.innerHTML = `<span class="${color}">[09:38:${String(12 + log.children.length).padStart(2, '0')}]</span><span class="text-zinc-300">${msg}</span>`;
+      log.appendChild(row);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    document.querySelectorAll('.option-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('.option-chip').forEach(c => c.className = 'option-chip rounded-xl border border-zinc-700 bg-zinc-900/70 px-2 py-3 text-[10px] font-black italic uppercase tracking-[0.12rem] text-zinc-400');
+        chip.className = 'option-chip active rounded-xl border border-fuchsia-500/25 bg-fuchsia-500/10 px-2 py-3 text-[10px] font-black italic uppercase tracking-[0.12rem]';
+        document.getElementById('theme-label').textContent = chip.dataset.theme;
+        appendLog('text-fuchsia-400', `THEME switched to ${chip.dataset.theme}.`);
+      });
+    });
+
+    document.getElementById('intensity-slider').addEventListener('input', e => {
+      document.getElementById('intensity-value').textContent = `${e.target.value}%`;
+    });
+
+    document.querySelectorAll('.toggle-row').forEach(row => {
+      row.querySelector('.toggle-switch').addEventListener('click', () => {
+        const enabled = row.dataset.toggle === 'true';
+        row.dataset.toggle = String(!enabled);
+        const dot = row.querySelector('.toggle-dot');
+        row.querySelector('.toggle-switch').className = `toggle-switch w-12 h-7 rounded-full px-1 ${!enabled ? 'bg-cyan-500/20 border border-cyan-500/40' : 'bg-zinc-800 border border-zinc-700'}`;
+        dot.className = `toggle-dot ${!enabled ? 'on bg-cyan-400 shadow-[0_0_12px_rgba(114,220,255,.7)]' : 'bg-zinc-400'} w-5 h-5 rounded-full transition-transform`;
+        dot.classList.toggle('on', !enabled);
+        const count = [...document.querySelectorAll('.toggle-row')].filter(r => r.dataset.toggle === 'true').length;
+        document.getElementById('enabled-count').textContent = `${count} enabled`;
+      });
+    });
+
+    document.querySelectorAll('.profile-card').forEach(card => {
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.profile-card').forEach(c => c.className = 'profile-card rounded-2xl border border-zinc-800 bg-black/40 p-3 text-left');
+        card.className = 'profile-card rounded-2xl border border-lime-400/25 bg-lime-400/10 p-3 text-left';
+        document.getElementById('profile-label').textContent = card.dataset.profile;
+        appendLog('text-lime-400', `PROFILE staged: ${card.dataset.profile}.`);
+      });
+    });
+
+    document.getElementById('save-config').addEventListener('click', () => {
+      appendLog('text-cyan-400', `PRESET_SAVE requested with theme ${document.getElementById('theme-label').textContent} and profile ${document.getElementById('profile-label').textContent}.`);
+    });
+  </script>
+</body>
+</html>

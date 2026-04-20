@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>N.E.R.D. | Device Discovery Mission Control</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            surface: '#0e0e0e',
+            background: '#0a0a0a',
+            'surface-container-lowest': '#000000',
+            'surface-container-low': '#131313',
+            'surface-container': '#191919',
+            'surface-container-high': '#1f1f1f',
+            'surface-container-highest': '#262626',
+            primary: '#72dcff',
+            secondary: '#2ff801',
+            tertiary: '#ff51fa',
+            error: '#ff716c',
+            outline: '#757575',
+            'outline-variant': '#484848'
+          },
+          fontFamily: { body: ['Space Grotesk'] }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      min-height: max(884px, 100dvh);
+      background:
+        radial-gradient(circle at 18% 14%, rgba(47,248,1,.10), transparent 24%),
+        radial-gradient(circle at 82% 20%, rgba(0,210,255,.10), transparent 22%),
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(180deg, #070707, #000 55%, #040404);
+      background-size: auto, auto, 24px 24px, 24px 24px, auto;
+      overflow-x: hidden;
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+    }
+    .glass-panel {
+      background: rgba(20, 20, 20, 0.7);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(114,220,255,0.12);
+    }
+    .carbon-pattern {
+      background-image:
+        linear-gradient(45deg, #101010 25%, transparent 25%),
+        linear-gradient(-45deg, #101010 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #101010 75%),
+        linear-gradient(-45deg, transparent 75%, #101010 75%);
+      background-size: 4px 4px;
+      background-color: #080808;
+    }
+    .scanline {
+      background: linear-gradient(to bottom, transparent 50%, rgba(0,210,255,0.03) 50%);
+      background-size: 100% 4px;
+      pointer-events: none;
+    }
+    @keyframes sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes ping { 0% { transform: scale(.3); opacity: 0; } 40% { opacity: .55; } 100% { transform: scale(1.18); opacity: 0; } }
+    @keyframes pulse { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+    .sweep { animation: sweep 6s linear infinite; }
+    .ping { animation: ping 2.4s ease-out infinite; }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+    .device-card.active { border-color: rgba(114,220,255,.38); box-shadow: inset 0 0 22px rgba(0,210,255,.14), 0 0 18px rgba(0,210,255,.12); }
+  </style>
+</head>
+<body class="bg-surface-container-lowest text-white selection:bg-primary selection:text-black">
+  <div class="scanline fixed inset-0 z-[80]"></div>
+
+  <header class="fixed top-0 left-0 right-0 z-50 h-16 border-b border-cyan-500/20 bg-black/85 backdrop-blur-xl px-5 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="material-symbols-outlined text-lime-400">radar</span>
+      <div>
+        <h1 class="text-xl font-black italic uppercase tracking-[0.18rem] text-cyan-400 drop-shadow-[0_0_10px_rgba(0,210,255,0.65)]">Discovery Grid</h1>
+        <p class="text-[9px] uppercase tracking-[0.2rem] text-zinc-500 font-bold">Mission Control Shell</p>
+      </div>
+    </div>
+    <button id="scan-toggle" class="rounded-lg border border-lime-400/30 bg-lime-400/10 px-3 py-2 text-[10px] font-black italic uppercase tracking-[0.14rem] text-lime-400 active:scale-95">Start Scan</button>
+  </header>
+
+  <main class="pt-20 pb-28 px-4 max-w-md mx-auto space-y-4">
+    <section class="glass-panel carbon-pattern rounded-2xl p-4 overflow-hidden relative">
+      <div class="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <p class="text-[10px] font-black italic uppercase tracking-[0.18rem] text-cyan-400">Multi-Protocol Sweep</p>
+          <p id="scan-status" class="text-[10px] font-bold italic text-zinc-500">Idle. Ready for ARP, mDNS, SSDP and HTTP hint pass.</p>
+        </div>
+        <div class="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2 py-1 text-[9px] font-black italic uppercase tracking-[0.12rem] text-cyan-400">24 Subnet Slots</div>
+      </div>
+
+      <div class="relative aspect-square w-full flex items-center justify-center">
+        <div class="absolute inset-[8%] rounded-full border border-cyan-500/15"></div>
+        <div class="absolute inset-[20%] rounded-full border border-cyan-500/22"></div>
+        <div class="absolute inset-[32%] rounded-full border border-lime-400/30"></div>
+        <div class="absolute inset-0 flex items-center justify-center">
+          <div class="absolute w-[86%] h-px bg-gradient-to-r from-transparent via-cyan-400/35 to-transparent"></div>
+          <div class="absolute h-[86%] w-px bg-gradient-to-b from-transparent via-cyan-400/35 to-transparent"></div>
+          <div class="absolute w-[76%] h-[76%] top-[12%] left-[50%] origin-bottom-left bg-gradient-to-tr from-transparent via-cyan-400/10 to-cyan-400/26 sweep" style="clip-path: polygon(0 100%, 100% 100%, 100% 0);"></div>
+        </div>
+        <div class="absolute inset-[28%] rounded-full border border-dashed border-cyan-500/24 sweep"></div>
+        <div class="absolute inset-[41%] rounded-full bg-black/55 border border-cyan-500/40 flex items-center justify-center shadow-[0_0_28px_rgba(0,210,255,.18)]">
+          <span class="material-symbols-outlined text-6xl text-cyan-400" style="font-variation-settings:'FILL' 1">wifi_tethering</span>
+        </div>
+
+        <div class="absolute top-[22%] left-[24%] flex flex-col items-center">
+          <span class="ping absolute inset-0 rounded-full border border-lime-400/50"></span>
+          <button class="node-btn relative w-4 h-4 rounded-full bg-lime-400 shadow-[0_0_14px_rgba(47,248,1,.9)]" data-id="Pixel 8 Pro" data-type="Phone" data-ip="192.168.12.31" data-signal="-48 dBm" data-latency="8 ms" data-services="mDNS, HTTPS, QUIC" data-risk="Trusted"></button>
+          <span class="mt-2 text-[9px] font-black italic uppercase tracking-[0.1rem] text-lime-400">P8P</span>
+        </div>
+        <div class="absolute top-[28%] right-[18%] flex flex-col items-center">
+          <button class="node-btn relative w-4 h-4 rounded-full bg-cyan-400 shadow-[0_0_14px_rgba(114,220,255,.9)] pulse" data-id="Gateway G5AR-1" data-type="Router" data-ip="192.168.12.1" data-signal="Ethernet backplane" data-latency="2 ms" data-services="DHCP, DNS, UPnP" data-risk="Core Infrastructure"></button>
+          <span class="mt-2 text-[9px] font-black italic uppercase tracking-[0.1rem] text-cyan-400">GW</span>
+        </div>
+        <div class="absolute bottom-[26%] left-[18%] flex flex-col items-center">
+          <button class="node-btn relative w-4 h-4 rounded-full bg-fuchsia-400 shadow-[0_0_14px_rgba(255,81,250,.9)]" data-id="Unknown Host A7" data-type="Unknown" data-ip="192.168.12.77" data-signal="-73 dBm" data-latency="19 ms" data-services="TCP 80, 443" data-risk="Review"></button>
+          <span class="mt-2 text-[9px] font-black italic uppercase tracking-[0.1rem] text-fuchsia-400">A7</span>
+        </div>
+        <div class="absolute bottom-[18%] right-[26%] flex flex-col items-center">
+          <button class="node-btn relative w-4 h-4 rounded-full bg-lime-400 shadow-[0_0_14px_rgba(47,248,1,.9)]" data-id="Shield TV" data-type="Media" data-ip="192.168.12.46" data-signal="-54 dBm" data-latency="11 ms" data-services="mDNS, Cast, HTTPS" data-risk="Trusted"></button>
+          <span class="mt-2 text-[9px] font-black italic uppercase tracking-[0.1rem] text-lime-400">TV</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2 mt-3">
+        <button class="filter-chip rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-2 py-2 text-[10px] font-black italic uppercase tracking-[0.12rem] text-cyan-400 active" data-filter="all">All</button>
+        <button class="filter-chip rounded-xl border border-zinc-700 bg-zinc-900/70 px-2 py-2 text-[10px] font-black italic uppercase tracking-[0.12rem] text-zinc-400" data-filter="trusted">Trusted</button>
+        <button class="filter-chip rounded-xl border border-zinc-700 bg-zinc-900/70 px-2 py-2 text-[10px] font-black italic uppercase tracking-[0.12rem] text-zinc-400" data-filter="review">Review</button>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-3 gap-3">
+      <div class="glass-panel rounded-2xl p-3">
+        <div class="text-[10px] font-black italic uppercase tracking-[0.12rem] text-cyan-400">Active</div>
+        <div id="metric-active" class="text-2xl font-black italic text-white">12</div>
+        <div class="text-[10px] font-bold italic text-zinc-500">Current nodes</div>
+      </div>
+      <div class="glass-panel rounded-2xl p-3">
+        <div class="text-[10px] font-black italic uppercase tracking-[0.12rem] text-lime-400">Trusted</div>
+        <div id="metric-trusted" class="text-2xl font-black italic text-white">09</div>
+        <div class="text-[10px] font-bold italic text-zinc-500">Auto-labeled</div>
+      </div>
+      <div class="glass-panel rounded-2xl p-3">
+        <div class="text-[10px] font-black italic uppercase tracking-[0.12rem] text-fuchsia-400">Review</div>
+        <div id="metric-review" class="text-2xl font-black italic text-white">03</div>
+        <div class="text-[10px] font-bold italic text-zinc-500">Needs attention</div>
+      </div>
+    </section>
+
+    <section class="glass-panel rounded-2xl p-4 space-y-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-black italic uppercase tracking-[0.14rem] text-white">Discovered Devices</h2>
+          <p class="text-[10px] font-bold italic text-zinc-500">Cards are prepped for future binding to real device detail routes.</p>
+        </div>
+        <span id="result-badge" class="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2 py-1 text-[9px] font-black italic uppercase tracking-[0.12rem] text-cyan-400">4 visible</span>
+      </div>
+
+      <div id="device-list" class="space-y-3">
+        <button class="device-card active w-full rounded-xl border border-cyan-500/30 bg-black/45 p-3 text-left" data-risk="trusted" data-id="Pixel 8 Pro" data-type="Phone" data-ip="192.168.12.31" data-signal="-48 dBm" data-latency="8 ms" data-services="mDNS, HTTPS, QUIC" data-risk-label="Trusted">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-[11px] font-black italic uppercase tracking-[0.12rem] text-cyan-400">Pixel 8 Pro</div>
+              <div class="text-[10px] font-bold italic text-zinc-500">Phone · 192.168.12.31 · Android 14</div>
+            </div>
+            <span class="rounded-lg border border-lime-400/25 bg-lime-400/10 px-2 py-1 text-[9px] font-black italic uppercase tracking-[0.1rem] text-lime-400">Trusted</span>
+          </div>
+        </button>
+
+        <button class="device-card w-full rounded-xl border border-zinc-800 bg-black/45 p-3 text-left" data-risk="trusted" data-id="Gateway G5AR-1" data-type="Router" data-ip="192.168.12.1" data-signal="Ethernet backplane" data-latency="2 ms" data-services="DHCP, DNS, UPnP" data-risk-label="Core">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-[11px] font-black italic uppercase tracking-[0.12rem] text-cyan-400">Gateway G5AR-1</div>
+              <div class="text-[10px] font-bold italic text-zinc-500">Router · 192.168.12.1 · 5G Gateway</div>
+            </div>
+            <span class="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2 py-1 text-[9px] font-black italic uppercase tracking-[0.1rem] text-cyan-400">Core</span>
+          </div>
+        </button>
+
+        <button class="device-card w-full rounded-xl border border-zinc-800 bg-black/45 p-3 text-left" data-risk="review" data-id="Unknown Host A7" data-type="Unknown" data-ip="192.168.12.77" data-signal="-73 dBm" data-latency="19 ms" data-services="TCP 80, 443" data-risk-label="Review">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-[11px] font-black italic uppercase tracking-[0.12rem] text-fuchsia-400">Unknown Host A7</div>
+              <div class="text-[10px] font-bold italic text-zinc-500">Unknown · 192.168.12.77 · Passive fingerprint only</div>
+            </div>
+            <span class="rounded-lg border border-fuchsia-500/25 bg-fuchsia-500/10 px-2 py-1 text-[9px] font-black italic uppercase tracking-[0.1rem] text-fuchsia-400">Review</span>
+          </div>
+        </button>
+
+        <button class="device-card w-full rounded-xl border border-zinc-800 bg-black/45 p-3 text-left" data-risk="trusted" data-id="Shield TV" data-type="Media" data-ip="192.168.12.46" data-signal="-54 dBm" data-latency="11 ms" data-services="mDNS, Cast, HTTPS" data-risk-label="Trusted">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-[11px] font-black italic uppercase tracking-[0.12rem] text-lime-400">Shield TV</div>
+              <div class="text-[10px] font-bold italic text-zinc-500">Media · 192.168.12.46 · Cast target</div>
+            </div>
+            <span class="rounded-lg border border-lime-400/25 bg-lime-400/10 px-2 py-1 text-[9px] font-black italic uppercase tracking-[0.1rem] text-lime-400">Trusted</span>
+          </div>
+        </button>
+      </div>
+    </section>
+
+    <section class="glass-panel rounded-2xl p-4 space-y-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-black italic uppercase tracking-[0.14rem] text-white">Focused Device</h2>
+          <p class="text-[10px] font-bold italic text-zinc-500">Tap any node or card to update this pane.</p>
+        </div>
+        <span id="detail-risk" class="rounded-lg border border-lime-400/25 bg-lime-400/10 px-2 py-1 text-[9px] font-black italic uppercase tracking-[0.12rem] text-lime-400">Trusted</span>
+      </div>
+
+      <div class="rounded-2xl border border-cyan-500/15 bg-black/50 p-4 space-y-3">
+        <div>
+          <div id="detail-name" class="text-lg font-black italic text-cyan-400">Pixel 8 Pro</div>
+          <div id="detail-subtitle" class="text-[10px] font-bold italic uppercase tracking-[0.12rem] text-zinc-500">Phone · Android 14</div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-[10px] font-bold italic">
+          <div class="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3"><span class="text-zinc-500 block">IP</span><span id="detail-ip" class="text-white">192.168.12.31</span></div>
+          <div class="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3"><span class="text-zinc-500 block">Latency</span><span id="detail-latency" class="text-white">8 ms</span></div>
+          <div class="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3"><span class="text-zinc-500 block">Signal</span><span id="detail-signal" class="text-white">-48 dBm</span></div>
+          <div class="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3"><span class="text-zinc-500 block">Services</span><span id="detail-services" class="text-white">mDNS, HTTPS, QUIC</span></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <button id="action-label" class="rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-3 py-3 text-[10px] font-black italic uppercase tracking-[0.12rem] text-cyan-400 active:scale-[0.98]">Label Device</button>
+          <button id="action-isolate" class="rounded-xl border border-fuchsia-500/25 bg-fuchsia-500/10 px-3 py-3 text-[10px] font-black italic uppercase tracking-[0.12rem] text-fuchsia-400 active:scale-[0.98]">Flag for Review</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="glass-panel rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-black italic uppercase tracking-[0.14rem] text-white">Sweep Log</h2>
+        <span class="text-[9px] font-black italic uppercase tracking-[0.12rem] text-cyan-400">Live shell</span>
+      </div>
+      <div id="sweep-log" class="rounded-xl border border-cyan-500/10 bg-black/50 p-3 font-mono text-[10px] space-y-2 max-h-44 overflow-auto">
+        <div class="flex gap-2"><span class="text-cyan-400">[09:31:01]</span><span class="text-zinc-300">DISCOVERY_IDLE waiting for operator start.</span></div>
+        <div class="flex gap-2"><span class="text-lime-400">[09:31:04]</span><span class="text-zinc-300">Last trusted cache restored: 9 familiar nodes.</span></div>
+        <div class="flex gap-2"><span class="text-fuchsia-400">[09:31:08]</span><span class="text-zinc-300">Passive fingerprint queue ready for unknown hosts.</span></div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="fixed bottom-0 left-0 right-0 z-50 h-20 px-3 bg-black/90 backdrop-blur-xl border-t border-cyan-500/20 rounded-t-2xl shadow-[0_-10px_30px_rgba(0,210,255,.06)] flex items-center justify-around">
+    <a href="nerd_assistant_command_center.html" class="flex flex-col items-center justify-center text-zinc-500 hover:text-cyan-400 transition-colors">
+      <span class="material-symbols-outlined text-xl">psychology</span>
+      <span class="mt-1 text-[10px] font-black italic uppercase tracking-[0.12rem]">Assistant</span>
+    </a>
+    <a href="nerd_device_discovery_mission_control.html" class="flex flex-col items-center justify-center text-lime-400 bg-lime-400/10 rounded-xl py-1.5 px-3 shadow-[inset_0_0_12px_rgba(47,248,1,.15)]">
+      <span class="material-symbols-outlined text-xl" style="font-variation-settings:'FILL' 1">radar</span>
+      <span class="mt-1 text-[10px] font-black italic uppercase tracking-[0.12rem]">Discovery</span>
+    </a>
+    <a href="nerd_system_settings_matrix.html" class="flex flex-col items-center justify-center text-zinc-500 hover:text-fuchsia-400 transition-colors">
+      <span class="material-symbols-outlined text-xl">tune</span>
+      <span class="mt-1 text-[10px] font-black italic uppercase tracking-[0.12rem]">Settings</span>
+    </a>
+  </nav>
+
+  <script>
+    const detail = {
+      name: document.getElementById('detail-name'),
+      subtitle: document.getElementById('detail-subtitle'),
+      ip: document.getElementById('detail-ip'),
+      latency: document.getElementById('detail-latency'),
+      signal: document.getElementById('detail-signal'),
+      services: document.getElementById('detail-services'),
+      risk: document.getElementById('detail-risk')
+    };
+
+    function renderDevice(data) {
+      detail.name.textContent = data.id;
+      detail.subtitle.textContent = `${data.type} · focused target`;
+      detail.ip.textContent = data.ip;
+      detail.latency.textContent = data.latency;
+      detail.signal.textContent = data.signal;
+      detail.services.textContent = data.services;
+      detail.risk.textContent = data.riskLabel || data.risk || 'Trusted';
+      detail.risk.className = `rounded-lg border px-2 py-1 text-[9px] font-black italic uppercase tracking-[0.12rem] ${String(data.risk).toLowerCase().includes('review') ? 'border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-400' : 'border-lime-400/25 bg-lime-400/10 text-lime-400'}`;
+    }
+
+    function setActiveCard(id) {
+      document.querySelectorAll('.device-card').forEach(card => card.classList.toggle('active', card.dataset.id === id));
+    }
+
+    [...document.querySelectorAll('.device-card'), ...document.querySelectorAll('.node-btn')].forEach(el => {
+      el.addEventListener('click', () => {
+        renderDevice(el.dataset);
+        setActiveCard(el.dataset.id);
+      });
+    });
+
+    const chips = document.querySelectorAll('.filter-chip');
+    const cards = document.querySelectorAll('.device-card');
+    const resultBadge = document.getElementById('result-badge');
+    chips.forEach(chip => chip.addEventListener('click', () => {
+      chips.forEach(c => c.className = 'filter-chip rounded-xl border border-zinc-700 bg-zinc-900/70 px-2 py-2 text-[10px] font-black italic uppercase tracking-[0.12rem] text-zinc-400');
+      chip.className = 'filter-chip rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-2 py-2 text-[10px] font-black italic uppercase tracking-[0.12rem] text-cyan-400 active';
+      const filter = chip.dataset.filter;
+      let visible = 0;
+      cards.forEach(card => {
+        const show = filter === 'all' || card.dataset.risk === filter;
+        card.style.display = show ? '' : 'none';
+        if (show) visible += 1;
+      });
+      resultBadge.textContent = `${visible} visible`;
+    }));
+
+    const log = document.getElementById('sweep-log');
+    const scanButton = document.getElementById('scan-toggle');
+    const scanStatus = document.getElementById('scan-status');
+    let scanning = false;
+    scanButton.addEventListener('click', () => {
+      scanning = !scanning;
+      scanButton.textContent = scanning ? 'Stop Scan' : 'Start Scan';
+      scanButton.className = `rounded-lg px-3 py-2 text-[10px] font-black italic uppercase tracking-[0.14rem] active:scale-95 ${scanning ? 'border border-error/30 bg-error/10 text-error' : 'border border-lime-400/30 bg-lime-400/10 text-lime-400'}`;
+      scanStatus.textContent = scanning ? 'Scanning subnet. Broadcasting discovery probes and refreshing hints.' : 'Idle. Ready for ARP, mDNS, SSDP and HTTP hint pass.';
+      const events = scanning
+        ? [
+            ['text-cyan-400', '[09:31:16]', 'ARP_SWEEP launched on 192.168.12.0/24.'],
+            ['text-lime-400', '[09:31:18]', 'mDNS responses received from 3 hosts.'],
+            ['text-fuchsia-400', '[09:31:21]', 'Unknown host retained for manual inspection.']
+          ]
+        : [['text-cyan-400', '[09:31:29]', 'DISCOVERY_IDLE. Active scan halted by operator.']];
+      events.forEach(([color, time, text]) => {
+        const row = document.createElement('div');
+        row.className = 'flex gap-2';
+        row.innerHTML = `<span class="${color}">${time}</span><span class="text-zinc-300">${text}</span>`;
+        log.appendChild(row);
+      });
+      log.scrollTop = log.scrollHeight;
+    });
+
+    document.getElementById('action-label').addEventListener('click', () => {
+      const row = document.createElement('div');
+      row.className = 'flex gap-2';
+      row.innerHTML = `<span class="text-lime-400">[09:31:35]</span><span class="text-zinc-300">LABEL_PENDING for ${detail.name.textContent}. Wire to save/apply flow.</span>`;
+      log.appendChild(row);
+      log.scrollTop = log.scrollHeight;
+    });
+
+    document.getElementById('action-isolate').addEventListener('click', () => {
+      const row = document.createElement('div');
+      row.className = 'flex gap-2';
+      row.innerHTML = `<span class="text-fuchsia-400">[09:31:39]</span><span class="text-zinc-300">REVIEW_PENDING for ${detail.name.textContent}. Awaiting backend action binding.</span>`;
+      log.appendChild(row);
+      log.scrollTop = log.scrollHeight;
+    });
+  </script>
+</body>
+</html>

@@ -10,16 +10,13 @@ import { Power, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getClientSafeMessage, loginWithGoogle, logout } from './authClient';
 import { NeuralProvider, useNeuralAuth, useNeuralRealtime, useNeuralSystem, useNeuralUi } from './context/NeuralContext';
+import type { MissionTab } from './components/mission/MissionShell';
 
 const Robot2D = lazy(() => import('./components/Robot2D').then(module => ({ default: module.Robot2D })));
 const ChatInterface = lazy(() => import('./components/ChatInterface').then(module => ({ default: module.ChatInterface })));
-const NetworkScreen = lazy(() => import('./components/NetworkScreen').then(module => ({ default: module.NetworkScreen })));
 const TaskLog = lazy(() => import('./components/TaskLog').then(module => ({ default: module.TaskLog })));
-const AssistantCommandCenterScreen = lazy(() =>
-  import('./components/AssistantCommandCenterScreen').then(module => ({ default: module.AssistantCommandCenterScreen }))
-);
-const SettingsMatrixScreen = lazy(() =>
-  import('./components/SettingsMatrixScreen').then(module => ({ default: module.SettingsMatrixScreen }))
+const MissionShell = lazy(() =>
+  import('./components/mission/MissionShell').then((m) => ({ default: m.MissionShell }))
 );
 
 function DiagnosticItem({ label, status, details }: { label: string, status: 'online' | 'offline' | 'warning', details: string }) {
@@ -174,9 +171,7 @@ function AppContent() {
   const { audioData, userPosition } = useNeuralRealtime();
   const { user, authLoading, authError, setAuthError } = useNeuralAuth();
   const { effectiveHudMotionScale, hudSettings } = useNeuralUi();
-  const [showNetworkScreen, setShowNetworkScreen] = useState(false);
-  const [showAssistantCommandCenter, setShowAssistantCommandCenter] = useState(false);
-  const [showSettingsMatrix, setShowSettingsMatrix] = useState(false);
+  const [missionHub, setMissionHub] = useState<MissionTab | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [chatMinimized, setChatMinimized] = useState(true);
   const [activeWindows, setActiveWindows] = useState({
@@ -210,9 +205,7 @@ function AppContent() {
       setActiveWindows(prev => ({ ...prev, radar: false }));
     } else if (transcript.includes('close all windows')) {
       setActiveWindows({ tasks: false, sensors: false, terminal: false, radar: false, diagnostics: false });
-      setShowAssistantCommandCenter(false);
-      setShowSettingsMatrix(false);
-      setShowNetworkScreen(false);
+      setMissionHub(null);
     }
   }, [lastTranscript]);
 
@@ -405,7 +398,7 @@ function AppContent() {
 
         {/* Right Side Panel */}
         <div className="absolute top-1/2 -translate-y-1/2 right-0 z-30">
-           <SidePanelRight onToggleSettings={() => setShowSettingsMatrix(true)} />
+           <SidePanelRight onToggleSettings={() => setMissionHub('settings')} />
         </div>
 
         {/* Center Robot */}
@@ -448,7 +441,11 @@ function AppContent() {
               onToggleMinimized={() => setChatMinimized(prev => !prev)}
               onOpenSettings={() => {
                 setChatMinimized(true);
-                setShowSettingsMatrix(true);
+                setMissionHub('settings');
+              }}
+              onOpenAssistantMission={() => {
+                setChatMinimized(true);
+                setMissionHub('assistant');
               }}
             />
           </Suspense>
@@ -457,12 +454,12 @@ function AppContent() {
         {/* Bottom Dock */}
         <div className="absolute bottom-4 left-0 right-0 z-40">
           <BottomDock
-            onCommandCenterClick={() => setShowAssistantCommandCenter(true)}
-            onNetworkClick={() => setShowNetworkScreen(true)}
+            onCommandCenterClick={() => setMissionHub('assistant')}
+            onNetworkClick={() => setMissionHub('discovery')}
             onDiagnosticsClick={() => toggleWindow('diagnostics')}
             onSensorsClick={() => toggleWindow('sensors')}
             onTerminalClick={() => toggleWindow('terminal')}
-            onSettingsClick={() => setShowSettingsMatrix(true)}
+            onSettingsClick={() => setMissionHub('settings')}
           />
         </div>
 
@@ -605,67 +602,23 @@ function AppContent() {
         </AnimatePresence>
 
         <AnimatePresence>
-          {showNetworkScreen && (
-            <Suspense fallback={<div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center"><div className="w-8 h-8 border-2 border-cyber-blue border-t-transparent rounded-full animate-spin"></div></div>}>
-              <NetworkScreen onClose={() => setShowNetworkScreen(false)} />
-            </Suspense>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {showAssistantCommandCenter && (
+          {missionHub !== null && (
             <Suspense
               fallback={
-                <div className="absolute inset-0 bg-black/80 z-[115] flex items-center justify-center">
-                  <div className="w-8 h-8 border-2 border-cyber-blue border-t-transparent rounded-full animate-spin" />
+                <div className="absolute inset-0 z-[115] flex items-center justify-center bg-black/80">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
                 </div>
               }
             >
-              <AssistantCommandCenterScreen
-                onClose={() => setShowAssistantCommandCenter(false)}
-                onExpandChat={() => {
-                  setShowAssistantCommandCenter(false);
-                  setChatMinimized(false);
-                }}
-                onOpenMissionLogs={() => {
-                  setShowAssistantCommandCenter(false);
-                  setActiveWindows(prev => ({ ...prev, tasks: true }));
-                }}
-                onOpenNetwork={() => {
-                  setShowAssistantCommandCenter(false);
-                  setShowNetworkScreen(true);
-                }}
-                onOpenSettings={() => {
-                  setShowAssistantCommandCenter(false);
-                  setShowSettingsMatrix(true);
-                }}
-                onOpenDiagnostics={() => {
-                  setShowAssistantCommandCenter(false);
-                  setActiveWindows(prev => ({ ...prev, diagnostics: true }));
-                }}
-                onOpenSensors={() => {
-                  setShowAssistantCommandCenter(false);
-                  setActiveWindows(prev => ({ ...prev, sensors: true }));
-                }}
-                onOpenTerminal={() => {
-                  setShowAssistantCommandCenter(false);
-                  setActiveWindows(prev => ({ ...prev, terminal: true }));
-                }}
+              <MissionShell
+                initialTab={missionHub}
+                onClose={() => setMissionHub(null)}
+                onExpandChat={() => setChatMinimized(false)}
+                onOpenMissionLogs={() => setActiveWindows((prev) => ({ ...prev, tasks: true }))}
+                onOpenDiagnostics={() => setActiveWindows((prev) => ({ ...prev, diagnostics: true }))}
+                onOpenSensors={() => setActiveWindows((prev) => ({ ...prev, sensors: true }))}
+                onOpenTerminal={() => setActiveWindows((prev) => ({ ...prev, terminal: true }))}
               />
-            </Suspense>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {showSettingsMatrix && (
-            <Suspense
-              fallback={
-                <div className="absolute inset-0 bg-black/80 z-[115] flex items-center justify-center">
-                  <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-                </div>
-              }
-            >
-              <SettingsMatrixScreen onClose={() => setShowSettingsMatrix(false)} />
             </Suspense>
           )}
         </AnimatePresence>

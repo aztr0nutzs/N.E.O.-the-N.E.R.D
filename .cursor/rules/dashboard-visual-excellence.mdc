@@ -1,0 +1,28 @@
+---
+description: >-
+  Vivid, high-impact dashboards — advanced visuals, custom widgets, and
+  polish when editing dashboard, analytics, chart, or canvas UI.
+globs: >-
+  **/*Dashboard*,**/*dashboard*,**/*Analytics*,**/*analytics*,**/*Report*,**/*report*,**/*chart*,**/*Chart*,**/*.canvas.tsx
+alwaysApply: false
+---
+
+# Dashboard visual excellence
+
+When building or editing **dashboards, analytics surfaces, reports, or `.canvas.tsx` artifacts**, treat visual quality as a first-class requirement—not a default admin table with stock components.
+
+## Visual bar
+
+- Aim for **immediate visual hierarchy**: clear focal metrics, readable density, and intentional color (not rainbow noise).
+- Use **advanced presentation** where it helps comprehension: layered depth (shadows, subtle borders, glass or frosted panels), refined gradients, purposeful motion (entrances, hover/tap feedback, live data emphasis), and cohesive typography scale.
+- Prefer **custom or composed widgets** (composed cards, sparkline strips, KPI bands, timeline lanes, mini-maps, bespoke legends) over dumping raw tables or unstyled default charts—wrap data in designed UI that matches the story.
+
+## Implementation discipline
+
+- **Performance**: animate transforms/opacity; avoid heavy blur on huge regions; virtualize long lists; debounce/throttle live updates.
+- **Accessibility**: preserve contrast, focus order, keyboard use, and `prefers-reduced-motion` (offer static or simplified states).
+- **N.E.O. HUD**: If work touches `src/App.tsx`, `Robot2D`, `TaskLog`, or `ChatInterface`, follow `.cursor/rules/neo-ui-preservation.mdc`—do not override the frozen HUD contract for “dashboard flair.”
+
+## Done when
+
+The layout reads as a **designed instrument panel**, not a spreadsheet with charts pasted on top—custom structure, strong defaults, and effects that clarify rather than decorate.
