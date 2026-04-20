@@ -1,5 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Radar, Wifi, WifiOff } from 'lucide-react';
+import { Loader2, Radar, Wifi, WifiOff } from 'lucide-react';
+import { useNeuralAuth } from '../../context/NeuralContext';
+import {
+  getLastScanSnapshot,
+  listDevices,
+  startNetworkScan,
+  type DeviceRecord,
+  type NetworkScanResult,
+  type ScanCoordinatorStatus,
+  type ScanSnapshot,
+} from '../../lib/network';
 import type { MissionTab } from './MissionShell';
 
 type NetInfo = {
@@ -20,20 +30,85 @@ function readNetworkInformation(): NetInfo | null {
   };
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function formatScanTime(scan: ScanSnapshot | null): string {
+  if (!scan) return 'never';
+  const timestamp = scan.finishedAt ?? scan.startedAt;
+  return new Date(timestamp).toLocaleTimeString();
+}
+
+function scanBadge(status: ScanCoordinatorStatus): string {
+  if (status === 'idle') return 'ready';
+  if (status === 'scanning') return 'scanning';
+  if (status === 'limited') return 'limited';
+  if (status === 'failed') return 'failed';
+  return 'complete';
+}
+
 interface Props {
   onNavigate: (tab: MissionTab) => void;
 }
 
 export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
+  const { user } = useNeuralAuth();
   const [online, setOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
   const [conn, setConn] = useState<NetInfo | null>(() => readNetworkInformation());
   const [lastRefresh, setLastRefresh] = useState(() => new Date());
+  const [scanStatus, setScanStatus] = useState<ScanCoordinatorStatus>('idle');
+  const [scanResult, setScanResult] = useState<NetworkScanResult | null>(null);
+  const [devices, setDevices] = useState<DeviceRecord[]>([]);
+  const [lastScan, setLastScan] = useState<ScanSnapshot | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   const refreshConn = useCallback(() => {
     setConn(readNetworkInformation());
     setLastRefresh(new Date());
     setOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
   }, []);
+
+  const loadNetworkInventory = useCallback(async () => {
+    if (!user) {
+      setDevices([]);
+      setLastScan(null);
+      return;
+    }
+
+    try {
+      const [nextDevices, nextLastScan] = await Promise.all([
+        listDevices(user.id),
+        getLastScanSnapshot(user.id),
+      ]);
+      setDevices(nextDevices);
+      setLastScan(nextLastScan);
+    } catch (error) {
+      setScanError(getErrorMessage(error));
+    }
+  }, [user]);
+
+  const runScan = useCallback(async () => {
+    refreshConn();
+    if (!user) {
+      setScanError('Sign in is required before scan snapshots can be persisted.');
+      setScanStatus('failed');
+      return;
+    }
+
+    setScanError(null);
+    setScanStatus('scanning');
+    try {
+      const result = await startNetworkScan(user.id);
+      setScanResult(result);
+      setDevices(result.knownDevices);
+      setLastScan(result.scanSnapshot);
+      setScanStatus(result.status);
+    } catch (error) {
+      setScanStatus('failed');
+      setScanError(getErrorMessage(error));
+    }
+  }, [refreshConn, user]);
 
   useEffect(() => {
     const on = () => setOnline(true);
@@ -50,6 +125,10 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
       c?.removeEventListener?.('change', onConn);
     };
   }, [refreshConn]);
+
+  useEffect(() => {
+    void loadNetworkInventory();
+  }, [loadNetworkInventory]);
 
   return (
     <div
@@ -84,11 +163,11 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
           <div>
             <p className="text-[10px] font-black italic uppercase tracking-[0.18rem] text-cyan-400">Browser-visible signals</p>
             <p className="text-[10px] font-bold italic text-zinc-500">
-              No ARP/mDNS/SSDP sweep runs in this web client yet. The sweep graphic is decorative only.
+              Scan engine is browser-safe: it records real link/probe signals and never fabricates LAN hosts.
             </p>
           </div>
           <div className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2 py-1 text-[9px] font-black italic uppercase text-cyan-400">
-            LAN scan: off
+            Scan: {scanBadge(scanStatus)}
           </div>
         </div>
 
@@ -110,25 +189,47 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
             <Wifi className="h-14 w-14 text-cyan-400" />
           </div>
           <p className="pointer-events-none absolute bottom-2 left-0 right-0 text-center text-[8px] font-bold uppercase tracking-wider text-zinc-500">
-            Decorative sweep — not discovering peers
+            Browser-safe sweep - limited visibility
           </p>
         </div>
 
         <button
           type="button"
-          disabled
-          title="Requires native or server-side scan engine — not implemented."
-          className="mt-4 w-full cursor-not-allowed rounded-xl border border-zinc-700 bg-zinc-900/60 py-3 text-[10px] font-black italic uppercase tracking-wider text-zinc-500"
+          disabled={scanStatus === 'scanning' || !user}
+          onClick={runScan}
+          title={
+            user
+              ? 'Run browser-safe scan: persists snapshot, real probes, and limitation notes.'
+              : 'Sign in required before scan snapshots can be persisted.'
+          }
+          className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-[10px] font-black italic uppercase tracking-wider ${
+            scanStatus === 'scanning' || !user
+              ? 'cursor-not-allowed border-zinc-700 bg-zinc-900/60 text-zinc-500'
+              : 'border-lime-400/35 bg-lime-400/10 text-lime-300 active:scale-95'
+          }`}
         >
-          Deep LAN scan (unavailable)
+          {scanStatus === 'scanning' && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+          {scanStatus === 'scanning' ? 'Scanning browser scope' : 'Run truthful scan'}
         </button>
+        <div className="mt-3 rounded-xl border border-zinc-800 bg-black/45 p-3 text-[10px] leading-relaxed text-zinc-400">
+          <p>
+            <span className="font-black uppercase tracking-wider text-zinc-500">Last scan</span>
+            <br />
+            {lastScan ? `${lastScan.status} at ${formatScanTime(lastScan)}` : 'No persisted scan snapshot yet.'}
+          </p>
+          {(scanResult?.summaryText || scanError) && (
+            <p className={scanError ? 'mt-2 text-red-300/90' : 'mt-2 text-cyan-100/90'}>
+              {scanError ?? scanResult?.summaryText}
+            </p>
+          )}
+        </div>
       </section>
 
       <section className="mb-4 grid grid-cols-3 gap-3">
         <div className="rounded-2xl border border-cyan-500/12 bg-[rgba(22,22,22,0.68)] p-3 backdrop-blur-md">
           <div className="text-[10px] font-black italic uppercase text-cyan-400">Nodes</div>
-          <div className="text-2xl font-black italic text-zinc-500">0</div>
-          <div className="text-[10px] font-bold italic text-zinc-600">No device graph</div>
+          <div className="text-2xl font-black italic text-zinc-500">{devices.length}</div>
+          <div className="text-[10px] font-bold italic text-zinc-600">Persisted rows</div>
         </div>
         <div className="rounded-2xl border border-lime-500/12 bg-[rgba(22,22,22,0.68)] p-3 backdrop-blur-md">
           <div className="text-[10px] font-black italic uppercase text-lime-400">Tab online</div>
@@ -137,7 +238,7 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
         </div>
         <div className="rounded-2xl border border-fuchsia-500/12 bg-[rgba(22,22,22,0.68)] p-3 backdrop-blur-md">
           <div className="text-[10px] font-black italic uppercase text-fuchsia-400">Hints</div>
-          <div className="text-2xl font-black italic text-zinc-400">{conn ? 'API' : '—'}</div>
+          <div className="text-2xl font-black italic text-zinc-400">{conn ? 'API' : '-'}</div>
           <div className="text-[10px] font-bold italic text-zinc-500">NetInfo</div>
         </div>
       </section>
@@ -162,13 +263,13 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
             <br />
             {online
               ? 'This tab reports an active network path.'
-              : 'Offline — sync and server-backed features fail until connectivity returns.'}
+              : 'Offline - sync and server-backed features fail until connectivity returns.'}
           </p>
           {conn ? (
             <p>
               <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Network Information API</span>
               <br />
-              Type: <span className="text-cyan-300">{conn.effectiveType ?? '—'}</span>
+              Type: <span className="text-cyan-300">{conn.effectiveType ?? '-'}</span>
               {typeof conn.downlink === 'number' && (
                 <>
                   <br />
@@ -196,10 +297,24 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
 
       <section className="rounded-2xl border border-zinc-700 bg-black/50 p-4">
         <h3 className="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Discovered devices</h3>
-        <p className="text-[10px] leading-relaxed text-zinc-500">
-          No host inventory is persisted or scanned from this client yet. When the scan engine ships, device cards will
-          bind here with Supabase-backed rows.
-        </p>
+        {devices.length > 0 ? (
+          <p className="text-[10px] leading-relaxed text-zinc-500">
+            {devices.length} Supabase-backed device row(s) exist. This browser-safe scan does not mark them online unless
+            a real scanner observes them. Current scan observed {scanResult?.discoveredDevices.length ?? 0} device(s).
+          </p>
+        ) : (
+          <p className="text-[10px] leading-relaxed text-zinc-500">
+            No host inventory rows exist yet. This browser-safe scan can persist snapshots and limitations, but it cannot
+            invent LAN devices without a native or server-side scanner.
+          </p>
+        )}
+        {scanResult?.limitationNotes.length ? (
+          <ul className="mt-3 space-y-1 text-[10px] leading-relaxed text-zinc-500">
+            {scanResult.limitationNotes.slice(0, 3).map((note) => (
+              <li key={note}>- {note}</li>
+            ))}
+          </ul>
+        ) : null}
         <button
           type="button"
           onClick={() => onNavigate('assistant')}

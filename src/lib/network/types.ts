@@ -39,7 +39,7 @@ export type DeviceCategory =
   | 'unknown';
 
 /** Lifecycle state of a single scan invocation. */
-export type ScanStatus = 'pending' | 'running' | 'completed' | 'failed' | 'aborted';
+export type ScanStatus = 'pending' | 'running' | 'completed' | 'failed' | 'aborted' | 'limited';
 
 /** Event kinds written to public.network_events. Append-only. */
 export type DeviceEventType =
@@ -52,6 +52,8 @@ export type DeviceEventType =
   | 'device_ignored_changed'
   | 'device_label_changed'
   | 'device_deleted'
+  | 'scan_started'
+  | 'scan_limited'
   | 'scan_completed'
   | 'note';
 

@@ -69,6 +69,7 @@ const SCAN_STATUSES: readonly ScanStatus[] = [
   'completed',
   'failed',
   'aborted',
+  'limited',
 ];
 const EVENT_TYPES: readonly DeviceEventType[] = [
   'device_discovered',
@@ -80,6 +81,8 @@ const EVENT_TYPES: readonly DeviceEventType[] = [
   'device_ignored_changed',
   'device_label_changed',
   'device_deleted',
+  'scan_started',
+  'scan_limited',
   'scan_completed',
   'note',
 ];

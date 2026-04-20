@@ -50,3 +50,19 @@ export {
 } from './eventsRepository';
 
 export { fetchNetworkSummary, summarizeDevices } from './networkSummary';
+
+export type {
+  BrowserProbeResult,
+  NetworkInformationSnapshot,
+  NetworkScanResult,
+  PlatformCapabilities,
+  RawDiscoveryResult,
+  ScanCoordinatorStatus,
+} from './scanService';
+
+export {
+  evaluatePlatformCapabilities,
+  isNetworkScanRunning,
+  scanCoordinator,
+  startNetworkScan,
+} from './scanService';

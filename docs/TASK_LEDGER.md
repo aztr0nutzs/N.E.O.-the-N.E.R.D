@@ -96,3 +96,32 @@ Branch: cursor/neo-nerd-screens-integration-9bf0
 ### External environment blocker
 - gradlew assembleDebug blocked by missing Android SDK configuration on this machine
 - not an app regression
+
+## Task — Scan Engine MVP
+Date: 2026-04-19
+Owner Agent: Codex
+Branch: task/scan-engine-mvp
+
+### Files changed
+- src/lib/network/types.ts
+- src/lib/network/mappers.ts
+- src/lib/network/index.ts
+- src/lib/network/scanService.ts
+- supabase/sql/007_network_scan_engine_status.sql
+- src/components/mission/NerdDeviceDiscoveryMission.tsx
+
+### Verified outcomes
+- Real scan coordinator/service added
+- Scan snapshots/events persist
+- Device observations normalize into canonical models
+- Discovery screen triggers truthful limited scan
+- No fake devices or fake deep-scan output introduced
+- npm ci passed
+- npm run lint passed
+- npm run build passed
+
+### Honest limitations
+- No broad LAN enumeration yet
+- No MAC/vendor discovery yet
+- No native Android network scanner plugin yet
+- Observed device count remains 0 unless a real scanner supplies observations
