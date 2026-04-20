@@ -11,10 +11,14 @@ export type {
   DeviceActionState,
   DeviceActionType,
   DeviceCategory,
+  DiscoverySourceKind,
   DeviceEvent,
   DeviceEventCreateInput,
   DeviceEventType,
   DeviceObservationInput,
+  FieldProvenanceState,
+  NativeDeviceObservation,
+  ObservationField,
   DeviceRecord,
   DeviceStateUpdate,
   DeviceStatus,
@@ -55,8 +59,11 @@ export { fetchNetworkSummary, summarizeDevices } from './networkSummary';
 export type {
   BrowserProbeResult,
   NetworkInformationSnapshot,
-  NetworkScanResult,
   PlatformCapabilities,
+} from './scanTypes';
+
+export type {
+  NetworkScanResult,
   RawDiscoveryResult,
   ScanCoordinatorStatus,
 } from './scanService';
@@ -67,6 +74,30 @@ export {
   scanCoordinator,
   startNetworkScan,
 } from './scanService';
+
+export type { DiscoveryAvailabilityState } from './discovery/capability';
+
+export { evaluateDiscoveryAvailability, selectDiscoveryProvider } from './discovery/capability';
+
+export type {
+  BrowserSafeDiscoveryProvider,
+  DiscoveryCollectionResult,
+  NativeAndroidDiscoveryProvider,
+  NetworkDiscoveryProvider,
+} from './discovery/providers';
+
+export {
+  browserSafeDiscoveryProvider,
+} from './discovery/browserSafeDiscovery';
+
+export {
+  nativeAndroidDiscoveryProvider,
+} from './discovery/nativeAndroidDiscovery';
+
+export {
+  normalizeNativeObservationToDeviceInput,
+  normalizeNativeObservations,
+} from './discovery/normalize';
 
 export type {
   DeviceActionRequest,

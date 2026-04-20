@@ -1,10 +1,16 @@
 import { Capacitor } from '@capacitor/core';
+import { evaluateDiscoveryAvailability, selectDiscoveryProvider } from './discovery/capability';
 import { listDevices, upsertDeviceFromObservation } from './devicesRepository';
 import { createDeviceEvent } from './eventsRepository';
 import {
   createScanSnapshot,
   finalizeScanSnapshot,
 } from './scansRepository';
+import type {
+  BrowserProbeResult,
+  NetworkInformationSnapshot,
+  PlatformCapabilities,
+} from './scanTypes';
 import type {
   DeviceEvent,
   DeviceObservationInput,
@@ -15,44 +21,19 @@ import type {
 
 export type ScanCoordinatorStatus = 'idle' | 'scanning' | 'completed' | 'failed' | 'limited';
 
-export interface NetworkInformationSnapshot {
-  effectiveType?: string;
-  downlink?: number;
-  rtt?: number;
-  saveData?: boolean;
-}
-
-export interface PlatformCapabilities {
-  runtime: 'browser' | 'capacitor' | 'unknown';
-  platform: string;
-  hasNavigatorOnline: boolean;
-  hasNetworkInformationApi: boolean;
-  hasFetch: boolean;
-  hasAbortController: boolean;
-  hasNativeLanScanner: boolean;
-  canCheckBrowserOnline: boolean;
-  canCheckSameOriginReachability: boolean;
-  canEnumerateLanDevices: boolean;
-  canReadMacAddresses: boolean;
-  canReadArpTable: boolean;
-  canReadWifiNeighbors: boolean;
-  limitationNotes: string[];
-}
-
-export interface BrowserProbeResult {
-  navigatorOnline: boolean | null;
-  networkInformation: NetworkInformationSnapshot | null;
-  sameOriginReachable: boolean | null;
-  sameOriginStatus: number | null;
-  sameOriginLatencyMs: number | null;
-  sameOriginError: string | null;
-}
+export type {
+  BrowserProbeResult,
+  NetworkInformationSnapshot,
+  PlatformCapabilities,
+} from './scanTypes';
 
 export interface RawDiscoveryResult {
   observations: DeviceObservationInput[];
   probes: BrowserProbeResult;
   capability: PlatformCapabilities;
   limitationNotes: string[];
+  scanPath: 'browser_safe' | 'native_android';
+  discoveryProviderKind: 'browser_safe' | 'native_android';
 }
 
 export interface NetworkScanResult {
@@ -67,11 +48,12 @@ export interface NetworkScanResult {
   probes: BrowserProbeResult;
   limitationNotes: string[];
   summaryText: string;
+  scanPath: RawDiscoveryResult['scanPath'];
+  discoveryProviderKind: RawDiscoveryResult['discoveryProviderKind'];
 }
 
 const SCAN_SCOPE = 'browser-safe-network-visibility';
 const ENGINE_VERSION = 'browser-safe-mvp-1';
-const SAME_ORIGIN_TIMEOUT_MS = 3000;
 
 function readNetworkInformation(): NetworkInformationSnapshot | null {
   if (typeof navigator === 'undefined') return null;
@@ -104,7 +86,9 @@ export function evaluatePlatformCapabilities(): PlatformCapabilities {
       : 'unknown';
   const hasFetch = typeof fetch === 'function';
   const hasAbortController = typeof AbortController === 'function';
-  const hasNativeLanScanner = Capacitor.isPluginAvailable('NeoNetworkScanner');
+  const discoveryAvailability = evaluateDiscoveryAvailability();
+  const { nativeScannerPluginRegistered } = discoveryAvailability;
+  const hasNativeLanScanner = nativeScannerPluginRegistered;
   const hasNetworkInformationApi = Boolean(
     hasNavigator && (navigator as Navigator & { connection?: NetworkInformationSnapshot }).connection,
   );
@@ -129,6 +113,11 @@ export function evaluatePlatformCapabilities(): PlatformCapabilities {
 
   limitationNotes.push('This MVP records real browser-visible probes and known inventory only; it does not synthesize devices.');
 
+  const canEnumerateLanDevices = discoveryAvailability.useNativeAndroidDiscoveryPath;
+  const canReadMacAddresses = discoveryAvailability.useNativeAndroidDiscoveryPath;
+  const canReadArpTable = discoveryAvailability.useNativeAndroidDiscoveryPath;
+  const canReadWifiNeighbors = discoveryAvailability.useNativeAndroidDiscoveryPath;
+
   return {
     runtime,
     platform,
@@ -139,68 +128,24 @@ export function evaluatePlatformCapabilities(): PlatformCapabilities {
     hasNativeLanScanner,
     canCheckBrowserOnline: hasNavigator && 'onLine' in navigator,
     canCheckSameOriginReachability,
-    canEnumerateLanDevices: false,
-    canReadMacAddresses: false,
-    canReadArpTable: false,
-    canReadWifiNeighbors: false,
+    canEnumerateLanDevices,
+    canReadMacAddresses,
+    canReadArpTable,
+    canReadWifiNeighbors,
     limitationNotes,
   };
 }
 
-async function probeSameOriginReachability(capability: PlatformCapabilities): Promise<{
-  reachable: boolean | null;
-  status: number | null;
-  latencyMs: number | null;
-  error: string | null;
-}> {
-  if (!capability.canCheckSameOriginReachability || typeof window === 'undefined') {
-    return { reachable: null, status: null, latencyMs: null, error: null };
-  }
-
-  const controller = new AbortController();
-  const started = performance.now();
-  const timeout = window.setTimeout(() => controller.abort(), SAME_ORIGIN_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(window.location.origin, {
-      cache: 'no-store',
-      method: 'GET',
-      signal: controller.signal,
-    });
-    return {
-      reachable: response.ok,
-      status: response.status,
-      latencyMs: Math.round(performance.now() - started),
-      error: null,
-    };
-  } catch (error) {
-    return {
-      reachable: false,
-      status: null,
-      latencyMs: Math.round(performance.now() - started),
-      error: getErrorMessage(error),
-    };
-  } finally {
-    window.clearTimeout(timeout);
-  }
-}
-
-async function runBrowserSafeDiscovery(capability: PlatformCapabilities): Promise<RawDiscoveryResult> {
-  const sameOrigin = await probeSameOriginReachability(capability);
-  const probes: BrowserProbeResult = {
-    navigatorOnline: capability.canCheckBrowserOnline && typeof navigator !== 'undefined' ? navigator.onLine : null,
-    networkInformation: readNetworkInformation(),
-    sameOriginReachable: sameOrigin.reachable,
-    sameOriginStatus: sameOrigin.status,
-    sameOriginLatencyMs: sameOrigin.latencyMs,
-    sameOriginError: sameOrigin.error,
-  };
-
+async function runDiscovery(capability: PlatformCapabilities): Promise<RawDiscoveryResult> {
+  const provider = selectDiscoveryProvider();
+  const collected = await provider.collect(capability);
   return {
-    observations: [],
-    probes,
-    capability,
-    limitationNotes: capability.limitationNotes,
+    observations: collected.observations,
+    probes: collected.probes,
+    capability: collected.capability,
+    limitationNotes: collected.limitationNotes,
+    scanPath: collected.scanPath,
+    discoveryProviderKind: provider.kind,
   };
 }
 
@@ -218,14 +163,20 @@ function buildSummary(raw: RawDiscoveryResult, discoveredCount: number, knownCou
         ? 'same-origin probe reachable'
         : 'same-origin probe failed';
 
+  const pathNote =
+    raw.scanPath === 'native_android'
+      ? 'Native Android discovery path selected; observations depend on the native bridge.'
+      : 'Browser-safe discovery path; device observations require a native or server-side scanner for LAN visibility.';
+
   return [
-    `Limited browser-safe scan completed: ${onlineState}; ${originState}.`,
+    `Limited network visibility scan completed: ${onlineState}; ${originState}.`,
     `Observed ${discoveredCount} device(s) in this scan and refreshed ${knownCount} persisted inventory row(s).`,
-    'Broad LAN discovery is not available without a native or server-side scanner.',
+    pathNote,
   ].join(' ');
 }
 
 function buildMetrics(raw: RawDiscoveryResult, discoveredCount: number, knownCount: number) {
+  const discoveryAvailability = evaluateDiscoveryAvailability();
   return {
     engineVersion: ENGINE_VERSION,
     scope: SCAN_SCOPE,
@@ -234,6 +185,9 @@ function buildMetrics(raw: RawDiscoveryResult, discoveredCount: number, knownCou
     observedDeviceCount: discoveredCount,
     knownDeviceCount: knownCount,
     limitationNotes: raw.limitationNotes,
+    scanPath: raw.scanPath,
+    discoveryProviderKind: raw.discoveryProviderKind,
+    discoveryAvailability,
   };
 }
 
@@ -275,6 +229,7 @@ class ScanCoordinator {
           engineVersion: ENGINE_VERSION,
           capability,
           limitationNotes: capability.limitationNotes,
+          discoveryAvailability: evaluateDiscoveryAvailability(),
         },
       });
 
@@ -282,16 +237,29 @@ class ScanCoordinator {
         await createDeviceEvent(userId, {
           scanId: scan.id,
           eventType: 'scan_started',
-          message: 'Browser-safe network scan started.',
-          metadata: { engineVersion: ENGINE_VERSION, scope: SCAN_SCOPE, capability },
+          message: 'Network scan started.',
+          metadata: {
+            engineVersion: ENGINE_VERSION,
+            scope: SCAN_SCOPE,
+            capability,
+            discoveryAvailability: evaluateDiscoveryAvailability(),
+          },
         }),
       );
 
-      const raw = await runBrowserSafeDiscovery(capability);
+      const raw = await runDiscovery(capability);
       const discoveredDevices: DeviceRecord[] = [];
 
       for (const observation of raw.observations) {
-        const { device, isNew } = await upsertDeviceFromObservation(userId, observation);
+        const enriched: DeviceObservationInput = {
+          ...observation,
+          metadata: {
+            ...(observation.metadata ?? {}),
+            discoverySource:
+              raw.scanPath === 'native_android' ? ('native_android' as const) : ('browser_safe' as const),
+          },
+        };
+        const { device, isNew } = await upsertDeviceFromObservation(userId, enriched);
         discoveredDevices.push(device);
         events.push(
           await createDeviceEvent(userId, {
@@ -299,7 +267,7 @@ class ScanCoordinator {
             scanId: scan.id,
             eventType: isNew ? 'device_discovered' : 'device_seen',
             message: isNew ? 'New device detected by scan.' : 'Known device seen again by scan.',
-            metadata: { observation },
+            metadata: { observation: enriched },
           }),
         );
       }
@@ -350,6 +318,8 @@ class ScanCoordinator {
         probes: raw.probes,
         limitationNotes: raw.limitationNotes,
         summaryText,
+        scanPath: raw.scanPath,
+        discoveryProviderKind: raw.discoveryProviderKind,
       };
     } catch (error) {
       const finishedAt = new Date().toISOString();
@@ -381,6 +351,9 @@ class ScanCoordinator {
         }
       }
 
+      const fallbackPath: RawDiscoveryResult['scanPath'] = 'browser_safe';
+      const fallbackProvider: RawDiscoveryResult['discoveryProviderKind'] = 'browser_safe';
+
       return {
         status: 'failed',
         startedAt,
@@ -400,6 +373,8 @@ class ScanCoordinator {
         },
         limitationNotes: capability.limitationNotes,
         summaryText: `Network scan failed: ${message}`,
+        scanPath: fallbackPath,
+        discoveryProviderKind: fallbackProvider,
       };
     }
   }
