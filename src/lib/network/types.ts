@@ -64,14 +64,20 @@ export type DeviceEventType =
  */
 export type DeviceActionType =
   | 'ping'
+  | 'open_interface'
   | 'wake_on_lan'
   | 'port_check'
   | 'trust'
   | 'favorite'
   | 'ignore'
+  | 'label'
+  | 'notes'
   | 'rename'
   | 'delete'
   | 'rescan';
+
+/** Truthfulness state for a device action execution path. */
+export type DeviceActionState = 'real' | 'partial' | 'unavailable';
 
 /**
  * A single discovered device owned by one user. `id` is a stable UUID minted
@@ -214,6 +220,7 @@ export interface NetworkSummary {
 export interface DeviceActionResult {
   actionType: DeviceActionType;
   deviceId: string;
+  state: DeviceActionState;
   success: boolean;
   message: string;
   data?: Record<string, unknown>;

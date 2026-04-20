@@ -125,3 +125,30 @@ Branch: task/scan-engine-mvp
 - No MAC/vendor discovery yet
 - No native Android network scanner plugin yet
 - Observed device count remains 0 unless a real scanner supplies observations
+
+## Task — Device Actions MVP
+Date: 2026-04-19
+Owner Agent: Codex
+Branch: task/device-actions-mvp
+
+### Files changed
+- src/lib/network/types.ts
+- src/lib/network/index.ts
+- src/lib/network/deviceActions.ts
+- src/components/mission/NerdDeviceDiscoveryMission.tsx
+
+### Verified outcomes
+- Canonical device action layer added
+- Persisted trust/favorite/ignore/label/notes actions implemented
+- Honest partial reachability/open-interface/HTTP(S) probe actions added
+- Wake-on-LAN kept as unavailable contract, not faked
+- Discovery mission UI now exposes compact truthful action strip
+- npm ci passed
+- npm run lint passed
+- npm run build passed
+
+### Honest limitations
+- No ICMP ping in browser/WebView
+- No raw TCP scan in browser/WebView
+- No Wake-on-LAN without native/server support
+- Admin URL opening cannot guarantee the target is really a router/admin panel

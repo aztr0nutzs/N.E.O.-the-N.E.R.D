@@ -2,9 +2,15 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Loader2, Radar, Wifi, WifiOff } from 'lucide-react';
 import { useNeuralAuth } from '../../context/NeuralContext';
 import {
+  checkDeviceReachability,
   getLastScanSnapshot,
   listDevices,
+  openDeviceInterface,
+  setDeviceFavorite,
+  setDeviceIgnored,
+  setDeviceTrusted,
   startNetworkScan,
+  type DeviceActionResult,
   type DeviceRecord,
   type NetworkScanResult,
   type ScanCoordinatorStatus,
@@ -48,6 +54,16 @@ function scanBadge(status: ScanCoordinatorStatus): string {
   return 'complete';
 }
 
+function isDeviceRecord(value: unknown): value is DeviceRecord {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    'ipAddress' in value &&
+    typeof (value as { id?: unknown }).id === 'string'
+  );
+}
+
 interface Props {
   onNavigate: (tab: MissionTab) => void;
 }
@@ -62,6 +78,8 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
   const [devices, setDevices] = useState<DeviceRecord[]>([]);
   const [lastScan, setLastScan] = useState<ScanSnapshot | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [actionBusyKey, setActionBusyKey] = useState<string | null>(null);
+  const [actionResult, setActionResult] = useState<DeviceActionResult | null>(null);
 
   const refreshConn = useCallback(() => {
     setConn(readNetworkInformation());
@@ -109,6 +127,62 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
       setScanError(getErrorMessage(error));
     }
   }, [refreshConn, user]);
+
+  const replaceDevice = useCallback((device: DeviceRecord) => {
+    setDevices((prev) => prev.map((item) => (item.id === device.id ? device : item)));
+  }, []);
+
+  const applyActionResult = useCallback((result: DeviceActionResult) => {
+    setActionResult(result);
+    const device = result.data?.device;
+    if (isDeviceRecord(device)) {
+      replaceDevice(device);
+    }
+  }, [replaceDevice]);
+
+  const runDeviceAction = useCallback(async (
+    device: DeviceRecord,
+    action: 'reach' | 'open' | 'trust' | 'favorite' | 'ignore',
+  ) => {
+    if (!user) {
+      setActionResult({
+        actionType: 'ping',
+        deviceId: device.id,
+        state: 'unavailable',
+        success: false,
+        message: 'Sign in is required before device actions can run.',
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const busyKey = `${action}:${device.id}`;
+    setActionBusyKey(busyKey);
+    try {
+      const result =
+        action === 'reach'
+          ? await checkDeviceReachability(user.id, device.id)
+          : action === 'open'
+            ? await openDeviceInterface(user.id, device.id, { device })
+            : action === 'trust'
+              ? await setDeviceTrusted(user.id, device.id, !device.trusted)
+              : action === 'favorite'
+                ? await setDeviceFavorite(user.id, device.id, !device.favorite)
+                : await setDeviceIgnored(user.id, device.id, !device.ignored);
+      applyActionResult(result);
+    } catch (error) {
+      setActionResult({
+        actionType: action === 'reach' ? 'ping' : action === 'open' ? 'open_interface' : action,
+        deviceId: device.id,
+        state: 'unavailable',
+        success: false,
+        message: getErrorMessage(error),
+        timestamp: new Date().toISOString(),
+      });
+    } finally {
+      setActionBusyKey(null);
+    }
+  }, [applyActionResult, user]);
 
   useEffect(() => {
     const on = () => setOnline(true);
@@ -315,6 +389,68 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
             ))}
           </ul>
         ) : null}
+        {devices.length > 0 ? (
+          <div className="mt-3 space-y-2">
+            {devices.slice(0, 3).map((device) => (
+              <div key={device.id} className="rounded-xl border border-cyan-500/10 bg-black/45 p-3">
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-[11px] font-black italic uppercase tracking-[0.08rem] text-cyan-200">
+                      {device.label ?? device.hostname ?? device.ipAddress}
+                    </p>
+                    <p className="text-[9px] font-bold text-zinc-600">
+                      {device.ipAddress} | {device.status} | {device.macAddress ? 'MAC known' : 'MAC unavailable'}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded border border-zinc-700 px-2 py-1 text-[8px] font-black uppercase text-zinc-500">
+                    Actions
+                  </span>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  <ActionButton
+                    label="Reach"
+                    busy={actionBusyKey === `reach:${device.id}`}
+                    onClick={() => runDeviceAction(device, 'reach')}
+                    title="Browser HTTP probe only; not ICMP ping."
+                  />
+                  <ActionButton
+                    label="Open"
+                    busy={actionBusyKey === `open:${device.id}`}
+                    onClick={() => runDeviceAction(device, 'open')}
+                    title="Open candidate HTTP admin/interface URL."
+                  />
+                  <ActionButton
+                    label={device.trusted ? 'Trusted' : 'Trust'}
+                    busy={actionBusyKey === `trust:${device.id}`}
+                    onClick={() => runDeviceAction(device, 'trust')}
+                    title="Persist trusted flag."
+                  />
+                  <ActionButton
+                    label={device.favorite ? 'Fav' : 'Star'}
+                    busy={actionBusyKey === `favorite:${device.id}`}
+                    onClick={() => runDeviceAction(device, 'favorite')}
+                    title="Persist favorite flag."
+                  />
+                  <ActionButton
+                    label={device.ignored ? 'Ignored' : 'Ignore'}
+                    busy={actionBusyKey === `ignore:${device.id}`}
+                    onClick={() => runDeviceAction(device, 'ignore')}
+                    title="Persist ignored flag."
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {actionResult ? (
+          <p className={`mt-3 rounded-lg border px-3 py-2 text-[10px] leading-relaxed ${
+            actionResult.success
+              ? 'border-lime-400/20 bg-lime-400/5 text-lime-100/90'
+              : 'border-orange-400/20 bg-orange-400/5 text-orange-100/90'
+          }`}>
+            {actionResult.actionType}: {actionResult.state} - {actionResult.message}
+          </p>
+        ) : null}
         <button
           type="button"
           onClick={() => onNavigate('assistant')}
@@ -325,5 +461,29 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
       </section>
       </div>
     </div>
+  );
+}
+
+function ActionButton({
+  label,
+  busy,
+  onClick,
+  title,
+}: {
+  label: string;
+  busy: boolean;
+  onClick: () => void;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onClick}
+      title={title}
+      className="min-h-8 rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-1 text-[8px] font-black uppercase tracking-[0.04rem] text-cyan-100 disabled:cursor-wait disabled:text-zinc-500"
+    >
+      {busy ? '...' : label}
+    </button>
   );
 }

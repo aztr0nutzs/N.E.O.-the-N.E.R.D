@@ -8,6 +8,7 @@
 
 export type {
   DeviceActionResult,
+  DeviceActionState,
   DeviceActionType,
   DeviceCategory,
   DeviceEvent,
@@ -66,3 +67,21 @@ export {
   scanCoordinator,
   startNetworkScan,
 } from './scanService';
+
+export type {
+  DeviceActionRequest,
+  DeviceHttpProbeOptions,
+} from './deviceActions';
+
+export {
+  checkDevicePort,
+  checkDeviceReachability,
+  executeDeviceAction,
+  openDeviceInterface,
+  setDeviceFavorite,
+  setDeviceIgnored,
+  setDeviceTrusted,
+  updateDeviceLabelAction,
+  updateDeviceNotesAction,
+  wakeDevice,
+} from './deviceActions';
