@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { motion } from 'motion/react';
-import { X, Binary } from 'lucide-react';
+import { X, SlidersHorizontal } from 'lucide-react';
 import { SettingsPanel } from './SettingsPanel';
 
 export interface SettingsMatrixScreenProps {
@@ -13,6 +13,10 @@ export interface SettingsMatrixScreenProps {
  * Full-screen operator settings matrix. Wraps the real SettingsPanel (localStorage persistence unchanged).
  */
 export function SettingsMatrixScreen({ onClose, embedded = false }: SettingsMatrixScreenProps) {
+  const scrollToApply = useCallback(() => {
+    document.getElementById('nerd-settings-apply')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -30,24 +34,36 @@ export function SettingsMatrixScreen({ onClose, embedded = false }: SettingsMatr
       <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(0,255,200,0.03)_3px),repeating-linear-gradient(90deg,transparent,transparent_2px,rgba(0,200,255,0.025)_3px)] bg-[length:100%_24px,24px_100%]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(0,234,255,0.14),transparent_50%)]" />
 
-      <header className="relative z-10 flex items-center justify-between gap-3 border-b border-emerald-500/25 bg-black/50 px-4 pb-2 pt-4">
-        <div className="flex min-w-0 items-center gap-2">
-          <Binary className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
+      <header className="relative z-10 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-cyan-500/20 bg-black/85 px-5 shadow-[0_0_24px_rgba(0,210,255,0.06)] backdrop-blur-xl">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <SlidersHorizontal className="h-7 w-7 shrink-0 text-fuchsia-400" aria-hidden />
           <div className="min-w-0">
-            <p className="text-[9px] uppercase tracking-[0.28em] text-emerald-300/70">Operator matrix</p>
-            <h1 className="truncate text-sm font-bold uppercase tracking-[0.18em] text-emerald-100">System preferences</h1>
+            <h1 className="truncate text-lg font-black italic uppercase tracking-[0.18rem] text-cyan-400 drop-shadow-[0_0_10px_rgba(0,210,255,0.45)]">
+              Settings matrix
+            </h1>
+            <p className="text-[9px] font-bold uppercase tracking-[0.2rem] text-zinc-500">Operator control shell</p>
           </div>
         </div>
-        {!embedded && (
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-full border border-white/15 bg-black/50 p-2 text-gray-300 transition-colors hover:border-emerald-400/40 hover:text-white"
-            aria-label="Close settings matrix"
+            onClick={scrollToApply}
+            className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-[10px] font-black italic uppercase tracking-[0.14rem] text-cyan-400 active:scale-95"
+            title="Scroll to Apply settings (same action as the button in the panel)"
           >
-            <X className="h-5 w-5" />
+            Apply focus
           </button>
-        )}
+          {!embedded && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border border-white/15 bg-black/50 p-2 text-gray-300 transition-colors hover:border-cyan-400/40 hover:text-white"
+              aria-label="Close settings matrix"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="relative z-10 flex-1 min-h-0 p-3">

@@ -88,6 +88,10 @@ export function NerdLogin({ onLogin, isAuthenticating, authError }: NerdLoginPro
           20% { transform: translate(-1px, 1px); }
           100% { transform: translate(0); text-shadow: -2px 0 #72dcff, 2px 0 #ff51fa; }
         }
+        @keyframes neo-streak {
+          0%, 100% { opacity: 0; transform: scaleY(0); }
+          50% { opacity: 1; transform: scaleY(1); }
+        }
         .neo-login-mesh {
           background:
             radial-gradient(ellipse 70% 50% at 30% 40%, rgba(114,220,255,0.14), transparent 50%),
@@ -133,6 +137,15 @@ export function NerdLogin({ onLogin, isAuthenticating, authError }: NerdLoginPro
           <div
             className="absolute bottom-[18%] right-[4%] h-[22px] w-2 rounded-full bg-gradient-to-b from-[#FF8C00] to-[#ff5500] shadow-[0_0_12px_#FF8C00]"
             style={{ animation: 'neo-alo 1.8s 0.9s ease-in-out infinite' }}
+          />
+          {/* Mid rail accents — nerd_login_enhanced_reactor_video_v2.html */}
+          <div
+            className="absolute left-[2%] top-1/2 h-[14px] w-[6px] -translate-y-1/2 rounded-full bg-gradient-to-b from-[#FF8C00] to-[#ff5500] shadow-[0_0_12px_#FF8C00]"
+            style={{ animation: 'neo-alo 1.2s 0.2s ease-in-out infinite' }}
+          />
+          <div
+            className="absolute right-[2%] top-1/2 h-[14px] w-[6px] -translate-y-1/2 rounded-full bg-gradient-to-b from-[#FF8C00] to-[#ff5500] shadow-[0_0_12px_#FF8C00]"
+            style={{ animation: 'neo-alo 1.2s 0.7s ease-in-out infinite' }}
           />
 
           <div className="absolute left-[-4px] top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#2ff801] bg-[#0a1a0a] text-[9px] font-black text-[#2ff801] shadow-[0_0_10px_rgba(47,248,1,0.6)]">
@@ -201,7 +214,7 @@ export function NerdLogin({ onLogin, isAuthenticating, authError }: NerdLoginPro
           />
 
           <div className="pointer-events-none absolute inset-[108px] z-[5] flex items-center justify-center overflow-hidden rounded-full shadow-[inset_0_0_20px_rgba(0,0,0,0.35)]">
-            <div className="relative h-full w-full overflow-hidden rounded-full">
+            <div className="relative h-full w-full overflow-hidden rounded-full shadow-[inset_0_0_10px_rgba(114,220,255,0.08),inset_0_0_24px_rgba(0,0,0,0.35)]">
               {allowBootVideo ? (
                 <video
                   className="h-full w-full scale-[0.84] rounded-full object-cover opacity-[0.97] mix-blend-screen"
@@ -223,8 +236,23 @@ export function NerdLogin({ onLogin, isAuthenticating, authError }: NerdLoginPro
                 />
               )}
               <div className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_50%,rgba(0,0,0,0)_64%,rgba(0,8,14,0.08)_82%,rgba(0,0,0,0.25)_100%)]" />
+              <div className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle_at_35%_24%,rgba(255,255,255,0.08)_0%,rgba(114,220,255,0.03)_16%,transparent_28%),radial-gradient(circle_at_68%_72%,rgba(114,220,255,0.04)_0%,transparent_22%)]" />
             </div>
           </div>
+
+          {/* Specular streaks — design HTML sk1–sk3 */}
+          <div
+            className="pointer-events-none absolute left-[168px] top-[52px] z-[8] h-6 w-0.5 rounded-full bg-gradient-to-b from-transparent via-[#72dcff] to-transparent opacity-80"
+            style={{ animation: 'neo-streak 2s ease-in-out infinite', animationDelay: '0s' }}
+          />
+          <div
+            className="pointer-events-none absolute left-[158px] top-[52px] z-[8] h-6 w-0.5 rounded-full bg-gradient-to-b from-transparent via-[#72dcff] to-transparent opacity-80"
+            style={{ animation: 'neo-streak 2s ease-in-out infinite', animationDelay: '0.4s' }}
+          />
+          <div
+            className="pointer-events-none absolute bottom-[60px] left-[165px] z-[8] h-6 w-0.5 rounded-full bg-gradient-to-b from-transparent via-[#72dcff] to-transparent opacity-80"
+            style={{ animation: 'neo-streak 2s ease-in-out infinite', animationDelay: '0.8s' }}
+          />
 
           <div className="pointer-events-none absolute left-1/2 top-[10px] z-10 -translate-x-1/2 whitespace-nowrap text-[8px] font-extrabold uppercase tracking-[0.3em] text-[#777]">
             Nerd launcher

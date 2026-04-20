@@ -52,11 +52,14 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
   }, [refreshConn]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto px-4 pb-24 pt-14 custom-scrollbar">
-      <header className="mb-4 flex items-center justify-between border-b border-cyan-500/20 pb-3">
-        <div className="flex items-center gap-3">
-          <Radar className="h-7 w-7 text-lime-400" />
-          <div>
+    <div
+      className="flex h-full min-h-0 flex-col overflow-y-auto bg-[#070707] pb-24 pt-0 custom-scrollbar"
+      style={{ fontFamily: "'Space Grotesk', ui-sans-serif, system-ui, sans-serif" }}
+    >
+      <header className="sticky top-0 z-20 mb-4 flex h-16 items-center justify-between border-b border-cyan-500/20 bg-black/85 px-5 shadow-[0_0_24px_rgba(0,210,255,0.06)] backdrop-blur-xl">
+        <div className="flex min-w-0 items-center gap-3">
+          <Radar className="h-7 w-7 shrink-0 text-lime-400" aria-hidden />
+          <div className="min-w-0">
             <h1 className="text-lg font-black italic uppercase tracking-[0.18rem] text-cyan-400 drop-shadow-[0_0_10px_rgba(0,210,255,0.65)]">
               Discovery grid
             </h1>
@@ -66,11 +69,14 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
         <button
           type="button"
           onClick={refreshConn}
-          className="rounded-lg border border-lime-400/30 bg-lime-400/10 px-3 py-2 text-[10px] font-black italic uppercase tracking-[0.14rem] text-lime-400 active:scale-95"
+          className="shrink-0 rounded-lg border border-lime-400/30 bg-lime-400/10 px-3 py-2 text-[10px] font-black italic uppercase tracking-[0.14rem] text-lime-400 active:scale-95"
+          title="Refresh browser Network Information + onLine state"
         >
           Refresh
         </button>
       </header>
+
+      <div className="min-h-0 flex-1 px-4">
 
       <section className="relative mb-4 overflow-hidden rounded-2xl border border-cyan-500/15 bg-[linear-gradient(180deg,rgba(20,20,20,0.75),rgba(8,8,8,0.95))] p-4">
         <div className="pointer-events-none absolute inset-0 opacity-[0.05] bg-[linear-gradient(45deg,#101010_25%,transparent_25%),linear-gradient(-45deg,#101010_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#101010_75%),linear-gradient(-45deg,transparent_75%,#101010_75%)] bg-[length:4px_4px]" />
@@ -90,6 +96,10 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
           <div className="absolute inset-[8%] rounded-full border border-cyan-500/15" />
           <div className="absolute inset-[20%] rounded-full border border-cyan-500/22" />
           <div className="absolute inset-[32%] rounded-full border border-lime-400/30" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="absolute w-[86%] h-px bg-gradient-to-r from-transparent via-cyan-400/35 to-transparent" />
+            <div className="absolute h-[86%] w-px bg-gradient-to-b from-transparent via-cyan-400/35 to-transparent" />
+          </div>
           <div
             className="absolute inset-[12%] left-1/2 top-1/2 h-[38%] w-[38%] origin-bottom-left animate-[spin_6s_linear_infinite] bg-gradient-to-tr from-transparent via-cyan-400/10 to-cyan-400/26"
             style={{ clipPath: 'polygon(0 100%, 100% 100%, 100% 0)' }}
@@ -198,6 +208,7 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
           Back to assistant shell
         </button>
       </section>
+      </div>
     </div>
   );
 }

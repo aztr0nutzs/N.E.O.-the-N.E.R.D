@@ -448,6 +448,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <RefreshCw className="w-4 h-4" /> Reset
         </button>
         <button
+          id="nerd-settings-apply"
           type="button"
           onClick={handleSave}
           className="flex-1 py-2 flex items-center justify-center gap-2 bg-cyber-blue/20 border border-cyber-blue text-cyber-blue rounded hover:bg-cyber-blue hover:text-black transition-colors shadow-[0_0_15px_rgba(0,255,255,0.2)]"
