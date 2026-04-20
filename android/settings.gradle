@@ -12,3 +12,30 @@ if (gradle.ext.hasCapacitorCordovaAndroidPlugins) {
 }
 
 apply from: 'capacitor.settings.gradle'
+
+// Capacitor regenerates capacitor.settings.gradle with `new File('../node_modules/...')`, which is
+// resolved against the JVM working directory, not the android/ folder. Some IDE and tooling
+// combinations start Gradle with a cwd outside android/, so :capacitor-* modules never land on
+// disk and Gradle reports "Project with path ':capacitor-android' could not be found".
+// Re-bind every `project('...').projectDir = new File('../...')` entry using Settings.file(),
+// which is always anchored to this settings.gradle directory.
+def capacitorSettingsFile = file('capacitor.settings.gradle')
+if (!capacitorSettingsFile.exists()) {
+    throw new RuntimeException(
+        "Missing ${capacitorSettingsFile.name}. Run from the repository root: npx cap sync"
+    )
+}
+capacitorSettingsFile.eachLine('UTF-8') { String line ->
+    def matcher = (line =~ /project\('(:[^']+)'\)\.projectDir\s*=\s*new File\(['"](\.\.\/[^'"]+)['"]\)/)
+    if (matcher.find()) {
+        def dir = file(matcher.group(2))
+        project(matcher.group(1)).projectDir = dir
+        if (!dir.directory) {
+            throw new RuntimeException(
+                "Capacitor native module directory missing: ${dir}\n" +
+                "From the repository root, run: npm ci   (or npm install)\n" +
+                "Then: npx cap sync"
+            )
+        }
+    }
+}
