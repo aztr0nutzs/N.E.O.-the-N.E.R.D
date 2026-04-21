@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, ExternalLink, Loader2, Radar, Wifi, WifiOff } from 'lucide-react';
 import { useNeuralAuth } from '../../context/NeuralContext';
 import {
@@ -150,6 +150,32 @@ function isDeviceRecord(value: unknown): value is DeviceRecord {
   );
 }
 
+function actionLabel(actionType: DeviceActionResult['actionType']): string {
+  switch (actionType) {
+    case 'ping':
+      return 'Reachability';
+    case 'open_interface':
+      return 'Open interface';
+    case 'wake_on_lan':
+      return 'Wake-on-LAN';
+    case 'port_check':
+      return 'Port check';
+    case 'trust':
+      return 'Trust';
+    case 'favorite':
+      return 'Favorite';
+    case 'ignore':
+      return 'Ignore';
+    case 'label':
+    case 'rename':
+      return 'Label';
+    case 'notes':
+      return 'Notes';
+    default:
+      return actionType;
+  }
+}
+
 interface Props {
   onNavigate: (tab: MissionTab) => void;
   selectedDeviceId?: string | null;
@@ -172,16 +198,20 @@ export function NerdDeviceDiscoveryMission({ onNavigate, selectedDeviceId = null
   const [selectedDeviceIntel, setSelectedDeviceIntel] = useState<AssistantNetworkIntel | null>(null);
   const [deviceEditor, setDeviceEditor] = useState({ label: '', notes: '' });
   const [deviceDetailBusy, setDeviceDetailBusy] = useState<string | null>(null);
+  const inventoryRequestRef = useRef(0);
 
   const selectedDevice = useMemo(
     () => devices.find((device) => device.id === selectedDeviceId) ?? null,
     [devices, selectedDeviceId],
   );
+  const selectedDeviceContext = useMemo(() => {
+    const context = selectedDeviceIntel?.selectedDevice ?? null;
+    return context && context.device.id === selectedDeviceId ? context : null;
+  }, [selectedDeviceId, selectedDeviceIntel]);
   const selectedDeviceBrief = useMemo<AssistantDeviceBrief | null>(
-    () => selectedDeviceIntel?.selectedDevice?.device ?? null,
-    [selectedDeviceIntel],
+    () => selectedDeviceContext?.device ?? null,
+    [selectedDeviceContext],
   );
-  const selectedDeviceContext = selectedDeviceIntel?.selectedDevice ?? null;
 
   const refreshConn = useCallback(() => {
     setConn(readNetworkInformation());
@@ -189,7 +219,8 @@ export function NerdDeviceDiscoveryMission({ onNavigate, selectedDeviceId = null
     setOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
   }, []);
 
-  const loadNetworkInventory = useCallback(async () => {
+  const loadNetworkInventory = useCallback(async (preferredSelectedDeviceId?: string | null) => {
+    const requestId = ++inventoryRequestRef.current;
     if (!user) {
       setDevices([]);
       setLastScan(null);
@@ -204,12 +235,16 @@ export function NerdDeviceDiscoveryMission({ onNavigate, selectedDeviceId = null
         getLastScanSnapshot(user.id),
         fetchNetworkTimeline(user.id, { limit: 8, scanLimit: 4, eventLimit: 16 }),
       ]);
-      const availableSelectedId = selectedDeviceId && nextDevices.some((device) => device.id === selectedDeviceId)
-        ? selectedDeviceId
+      const baseSelectedId = preferredSelectedDeviceId ?? selectedDeviceId;
+      const availableSelectedId = baseSelectedId && nextDevices.some((device) => device.id === baseSelectedId)
+        ? baseSelectedId
         : nextDevices[0]?.id ?? null;
       const nextIntel = await fetchAssistantNetworkIntel(user.id, {
         selectedDeviceId: availableSelectedId ?? undefined,
       });
+      if (requestId !== inventoryRequestRef.current) {
+        return;
+      }
       setDevices(nextDevices);
       setLastScan(nextLastScan);
       setTimeline(nextTimeline);
@@ -241,6 +276,7 @@ export function NerdDeviceDiscoveryMission({ onNavigate, selectedDeviceId = null
       const availableSelectedId = selectedDeviceId && result.knownDevices.some((device) => device.id === selectedDeviceId)
         ? selectedDeviceId
         : result.knownDevices[0]?.id ?? null;
+      const refreshRequestId = ++inventoryRequestRef.current;
       void Promise.all([
         fetchNetworkTimeline(user.id, { limit: 8, scanLimit: 4, eventLimit: 16 }),
         fetchAssistantNetworkIntel(user.id, {
@@ -248,6 +284,9 @@ export function NerdDeviceDiscoveryMission({ onNavigate, selectedDeviceId = null
         }),
       ])
         .then(([nextTimeline, nextIntel]) => {
+          if (refreshRequestId !== inventoryRequestRef.current) {
+            return;
+          }
           setTimeline(nextTimeline);
           setSelectedDeviceIntel(nextIntel);
           if (availableSelectedId !== selectedDeviceId) {
@@ -303,7 +342,7 @@ export function NerdDeviceDiscoveryMission({ onNavigate, selectedDeviceId = null
                 ? await setDeviceFavorite(user.id, device.id, !device.favorite)
                 : await setDeviceIgnored(user.id, device.id, !device.ignored);
       applyActionResult(result);
-      void loadNetworkInventory();
+      void loadNetworkInventory(device.id);
     } catch (error) {
       setActionResult({
         actionType: action === 'reach' ? 'ping' : action === 'open' ? 'open_interface' : action,
@@ -317,6 +356,14 @@ export function NerdDeviceDiscoveryMission({ onNavigate, selectedDeviceId = null
       setActionBusyKey(null);
     }
   }, [applyActionResult, loadNetworkInventory, user]);
+
+  const selectAndRunDeviceAction = useCallback((
+    device: DeviceRecord,
+    action: 'reach' | 'open' | 'trust' | 'favorite' | 'ignore',
+  ) => {
+    onSelectDevice?.(device.id);
+    void runDeviceAction(device, action);
+  }, [onSelectDevice, runDeviceAction]);
 
   useEffect(() => {
     const on = () => setOnline(true);
@@ -380,7 +427,7 @@ export function NerdDeviceDiscoveryMission({ onNavigate, selectedDeviceId = null
                     ? await updateDeviceLabelAction(user.id, selectedDevice.id, deviceEditor.label)
                     : await updateDeviceNotesAction(user.id, selectedDevice.id, deviceEditor.notes);
       applyActionResult(result);
-      await loadNetworkInventory();
+      await loadNetworkInventory(selectedDevice.id);
     } catch (error) {
       setActionResult({
         actionType:
@@ -649,31 +696,31 @@ export function NerdDeviceDiscoveryMission({ onNavigate, selectedDeviceId = null
                     <ActionButton
                       label="Reach"
                       busy={actionBusyKey === `reach:${device.id}`}
-                      onClick={() => runDeviceAction(device, 'reach')}
+                      onClick={() => selectAndRunDeviceAction(device, 'reach')}
                       title="Browser HTTP probe only; not ICMP ping."
                     />
                     <ActionButton
                       label="Open"
                       busy={actionBusyKey === `open:${device.id}`}
-                      onClick={() => runDeviceAction(device, 'open')}
+                      onClick={() => selectAndRunDeviceAction(device, 'open')}
                       title="Open candidate HTTP admin/interface URL."
                     />
                     <ActionButton
                       label={device.trusted ? 'Trusted' : 'Trust'}
                       busy={actionBusyKey === `trust:${device.id}`}
-                      onClick={() => runDeviceAction(device, 'trust')}
+                      onClick={() => selectAndRunDeviceAction(device, 'trust')}
                       title="Persist trusted flag."
                     />
                     <ActionButton
                       label={device.favorite ? 'Fav' : 'Star'}
                       busy={actionBusyKey === `favorite:${device.id}`}
-                      onClick={() => runDeviceAction(device, 'favorite')}
+                      onClick={() => selectAndRunDeviceAction(device, 'favorite')}
                       title="Persist favorite flag."
                     />
                     <ActionButton
                       label={device.ignored ? 'Ignored' : 'Ignore'}
                       busy={actionBusyKey === `ignore:${device.id}`}
-                      onClick={() => runDeviceAction(device, 'ignore')}
+                      onClick={() => selectAndRunDeviceAction(device, 'ignore')}
                       title="Persist ignored flag."
                     />
                     <div className="flex items-center justify-center text-cyan-300/70">
@@ -771,10 +818,11 @@ export function NerdDeviceDiscoveryMission({ onNavigate, selectedDeviceId = null
                 />
                 <button
                   type="button"
+                  disabled={deviceDetailBusy === `saveLabel:${selectedDevice.id}`}
                   onClick={() => void runDetailAction('saveLabel')}
                   className="mt-2 rounded-lg border border-cyan-500/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.1rem] text-cyan-200"
                 >
-                  Save label
+                  {deviceDetailBusy === `saveLabel:${selectedDevice.id}` ? 'Saving...' : 'Save label'}
                 </button>
               </label>
               <label className="rounded-xl border border-cyan-500/10 bg-black/40 p-3">
@@ -787,10 +835,11 @@ export function NerdDeviceDiscoveryMission({ onNavigate, selectedDeviceId = null
                 />
                 <button
                   type="button"
+                  disabled={deviceDetailBusy === `saveNotes:${selectedDevice.id}`}
                   onClick={() => void runDetailAction('saveNotes')}
                   className="mt-2 rounded-lg border border-cyan-500/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.1rem] text-cyan-200"
                 >
-                  Save notes
+                  {deviceDetailBusy === `saveNotes:${selectedDevice.id}` ? 'Saving...' : 'Save notes'}
                 </button>
               </label>
             </div>
@@ -854,7 +903,7 @@ export function NerdDeviceDiscoveryMission({ onNavigate, selectedDeviceId = null
               ? 'border-lime-400/20 bg-lime-400/5 text-lime-100/90'
               : 'border-orange-400/20 bg-orange-400/5 text-orange-100/90'
           }`}>
-            {actionResult.actionType}: {actionResult.state} - {actionResult.message}
+            {actionLabel(actionResult.actionType)} · {actionResult.state} — {actionResult.message}
           </p>
         ) : null}
         <button

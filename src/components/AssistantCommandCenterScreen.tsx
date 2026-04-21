@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Activity,
@@ -56,6 +56,12 @@ function lastScanPathLabel(networkIntel: AssistantNetworkIntel | null): string {
   return 'No stored scan path yet';
 }
 
+function selectedDeviceHeading(selectedDeviceId: string | null, selectedDeviceTitle: string | null): string {
+  if (selectedDeviceTitle) return selectedDeviceTitle;
+  if (selectedDeviceId) return 'Refreshing selected device';
+  return 'No device selected';
+}
+
 /**
  * Assistant command center — visual fidelity from nerd_assistant_command_center.html.
  * Controls are wired to real destinations or explicitly marked unavailable / decorative.
@@ -81,6 +87,7 @@ export function AssistantCommandCenterScreen({
   const [networkIntel, setNetworkIntel] = useState<AssistantNetworkIntel | null>(null);
   const [networkIntelLoading, setNetworkIntelLoading] = useState(false);
   const [networkIntelError, setNetworkIntelError] = useState<string | null>(null);
+  const selectedDeviceRequestVersionRef = useRef(0);
 
   const motionPct = useMemo(() => {
     const mag = Math.hypot(userPosition.x, userPosition.y);
@@ -119,14 +126,23 @@ export function AssistantCommandCenterScreen({
       return;
     }
 
+    const requestVersion = selectedDeviceRequestVersionRef.current + 1;
+    selectedDeviceRequestVersionRef.current = requestVersion;
     setNetworkIntelLoading(true);
     setNetworkIntelError(null);
     try {
-      setNetworkIntel(await fetchAssistantNetworkIntel(user.id, { selectedDeviceId: selectedDeviceId ?? undefined }));
+      const nextIntel = await fetchAssistantNetworkIntel(user.id, { selectedDeviceId: selectedDeviceId ?? undefined });
+      if (requestVersion === selectedDeviceRequestVersionRef.current) {
+        setNetworkIntel(nextIntel);
+      }
     } catch (error) {
-      setNetworkIntelError(getErrorMessage(error));
+      if (requestVersion === selectedDeviceRequestVersionRef.current) {
+        setNetworkIntelError(getErrorMessage(error));
+      }
     } finally {
-      setNetworkIntelLoading(false);
+      if (requestVersion === selectedDeviceRequestVersionRef.current) {
+        setNetworkIntelLoading(false);
+      }
     }
   }, [selectedDeviceId, user]);
 
@@ -464,7 +480,7 @@ export function AssistantCommandCenterScreen({
             <div className="space-y-3">
               <div className="rounded-xl border border-cyan-500/10 bg-black/40 px-3 py-3">
                 <div className="text-[11px] font-black italic uppercase tracking-[0.1rem] text-cyan-300">
-                  {selectedDeviceBrief.title}
+                  {selectedDeviceHeading(selectedDeviceId, selectedDeviceBrief?.title ?? null)}
                 </div>
                 <div className="mt-1 text-[10px] font-bold italic leading-relaxed text-zinc-500">
                   IP {selectedDeviceBrief.ipAddress} · status {selectedDeviceBrief.status} · trusted {selectedDeviceBrief.trusted ? 'yes' : 'no'} · ignored {selectedDeviceBrief.ignored ? 'yes' : 'no'}
@@ -524,8 +540,9 @@ export function AssistantCommandCenterScreen({
             </div>
           ) : (
             <p className="text-[10px] font-bold italic leading-relaxed text-zinc-500">
-              Select a device from the discovery mission to ask grounded questions like what changed for this device,
-              what actions are available, or whether it should be trusted or ignored.
+              {selectedDeviceId
+                ? 'Selected device context is refreshing. If this persists, return to Discovery and reselect the device.'
+                : 'Select a device from the discovery mission to ask grounded questions like what changed for this device, what actions are available, or whether it should be trusted or ignored.'}
             </p>
           )}
         </section>
