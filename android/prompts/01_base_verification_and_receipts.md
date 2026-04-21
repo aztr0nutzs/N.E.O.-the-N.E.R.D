@@ -18,7 +18,7 @@ Perform a read-only verification pass on this project and produce receipts befor
    - `npm run lint`
    - `npm run build`
 4. report build chunk sizes
-5. inspect `server.ts`, `src/components/ChatInterface.tsx`, `src/components/Robot3D.tsx`, `src/hooks/useNeuralSystems.ts`, `src/hooks/useSpeechRecognition.ts`, `src/hooks/useMediaStream.ts`, `src/hooks/useMotionDetection.ts`, and `src/firebase.ts`
+5. inspect `server.ts`, `src/components/ChatInterface.tsx`, `src/components/Robot3D.tsx`, `src/hooks/useNeuralSystems.ts`, `src/hooks/useSpeechRecognition.ts`, `src/hooks/useMediaStream.ts`, `src/hooks/useMotionDetection.ts`, and `src/authClient.ts`
 6. produce a concise findings report with verified strengths, verified failures, inferred risks, and correction priorities
 
 ### Output requirements

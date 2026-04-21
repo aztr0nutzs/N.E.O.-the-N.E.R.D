@@ -24,11 +24,7 @@ Replace Firestore collections with Postgres tables:
 Both tables store a `user_id uuid` foreign key to `auth.users(id)`.
 
 ## Realtime
-The app currently uses Firestore realtime listeners. For migration simplicity, start with fetch + refresh strategy or Supabase realtime subscriptions only after the base migration is stable.
-
-Recommended first cut:
-- fetch tasks/messages on auth state change and after writes
-- optionally add Supabase realtime subscriptions in a later pass
+On the Supabase-first branch, tasks and messages are loaded via Postgres queries (fetch + refresh on auth change and after writes). Optional Supabase Realtime subscriptions can be added later if needed.
 
 ## Server
 Use the service-role key only on the server.
@@ -43,7 +39,7 @@ Use RLS policies so users can only access rows where `user_id = auth.uid()`.
 
 ## Files to introduce
 - `src/lib/supabase.ts`
-- `src/lib/authApi.ts` or replacement `src/firebase.ts` preserving helper names
+- `src/authClient.ts` (Supabase auth/session + protected JSON fetch; preserve helper names where the app already depends on them)
 - optional `src/lib/tasksApi.ts`
 - optional `src/lib/messagesApi.ts`
 - `src/lib/supabaseAdmin.ts` or server-local helper for token verification

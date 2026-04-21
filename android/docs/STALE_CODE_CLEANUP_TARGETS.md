@@ -12,7 +12,7 @@ Check for:
 - unused imports in `src/App.tsx`
 - unused imports in split hooks
 - unused imports in `server.ts`
-- unused imports in `src/firebase.ts`
+- unused imports in `src/authClient.ts`
 
 ### 3. Debug-only logs
 Review:

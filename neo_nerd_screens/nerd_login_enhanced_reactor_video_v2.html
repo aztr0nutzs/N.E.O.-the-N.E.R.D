@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>N.E.R.D. | Neural Core</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;overflow:hidden;}
+body{background:#000;font-family:'Space Grotesk',sans-serif;color:#fff;position:relative;}
+
+/* ── LEGO CANVAS ── */
+#lego-canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block;z-index:0;}
+
+/* ── OVERLAYS ── */
+.vignette{position:fixed;inset:0;background:radial-gradient(ellipse 70% 70% at 50% 50%,rgba(0,0,0,0.45) 0%,rgba(0,0,0,0.92) 100%);z-index:1;pointer-events:none;}
+.scanline{position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.1) 2px,rgba(0,0,0,0.1) 4px);z-index:2;pointer-events:none;}
+
+/* ── LAYOUT ── */
+.main{position:relative;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
+
+/* ── HEADER ── */
+.hdr{position:fixed;top:0;left:0;right:0;padding:20px 28px;display:flex;justify-content:space-between;align-items:flex-start;z-index:20;}
+.hdr-item{display:flex;flex-direction:column;gap:4px;}
+.hdr-label{font-size:9px;font-weight:700;letter-spacing:0.3em;color:rgba(255,255,255,0.7);text-transform:uppercase;text-shadow:0 0 8px rgba(0,0,0,0.9);}
+.hdr-line{height:1px;width:40px;}
+.hl-blue{background:rgba(114,220,255,0.6);}
+.hl-green{background:rgba(47,248,1,0.6);}
+.hdr-green{color:rgba(47,248,1,0.9);text-shadow:0 0 8px rgba(0,0,0,0.9);}
+.hdr-right{align-items:flex-end;}
+
+/* ── REACTOR WRAP ── */
+.reactor-wrap{position:relative;width:340px;height:340px;margin-bottom:24px;}
+.reactor-outer-frame{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 30% 20%,#3a3a3a,#141414 60%,#0a0a0a);box-shadow:0 0 0 3px #1a1a1a,0 0 60px rgba(0,0,0,0.9),inset 0 0 30px rgba(0,0,0,0.8);}
+.bolt{position:absolute;width:10px;height:16px;background:#1e1e1e;border:1px solid #333;border-radius:2px;z-index:15;}
+.bolt-top{top:-2px;left:50%;transform:translateX(-50%);}
+.bolt-bot{bottom:-2px;left:50%;transform:translateX(-50%);}
+.accent-light{position:absolute;width:8px;height:22px;background:linear-gradient(180deg,#FF8C00,#ff5500);border-radius:4px;box-shadow:0 0 12px #FF8C00,0 0 24px rgba(255,140,0,0.5);z-index:15;}
+.al-tl{top:18%;left:4%;}.al-tr{top:18%;right:4%;}.al-bl{bottom:18%;left:4%;}.al-br{bottom:18%;right:4%;}.al-ml{top:42%;left:2%;}.al-mr{top:42%;right:2%;}
+.side-badge{position:absolute;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;z-index:15;}
+.badge-left{left:-4px;background:#0a1a0a;border-color:#2ff801;color:#2ff801;box-shadow:0 0 10px rgba(47,248,1,0.6);}
+.badge-right{right:-4px;background:#0a0e1a;border-color:#72dcff;color:#72dcff;box-shadow:0 0 10px rgba(114,220,255,0.6);}
+
+/* ── NERD GEAR/NEON RINGS ── */
+.gear-ring{position:absolute;border-radius:50%;}
+.gr-1{inset:6px;animation:cw 25s linear infinite;}
+.gr-2{inset:22px;animation:ccw 18s linear infinite;}
+.neon-ring{position:absolute;border-radius:50%;}
+.nr-cyan{inset:44px;border:3px solid rgba(114,220,255,0.9);box-shadow:0 0 12px #72dcff,0 0 24px rgba(114,220,255,0.4),inset 0 0 12px rgba(114,220,255,0.2);animation:ccw 8s linear infinite;}
+.nr-purple{inset:60px;border:2px solid rgba(180,80,255,0.8);box-shadow:0 0 10px #b450ff,0 0 20px rgba(180,80,255,0.3);animation:cw 12s linear infinite;}
+.nr-cyan2{inset:80px;border:1.5px dashed rgba(114,220,255,0.5);animation:ccw 20s linear infinite;}
+.tick-ring{position:absolute;inset:44px;animation:ccw 8s linear infinite;}
+.inner-cavity{position:absolute;inset:90px;border-radius:50%;background:radial-gradient(circle at 40% 30%,#0d1a2a,#050a10 70%,#020408);border:1px solid rgba(114,220,255,0.3);z-index:3;}
+.scan-bar{position:absolute;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,rgba(114,220,255,0.6),transparent);animation:scanbar 3s ease-in-out infinite;border-radius:50%;}
+.streak{position:absolute;width:2px;height:24px;background:linear-gradient(180deg,transparent,#72dcff,transparent);border-radius:2px;animation:streak 2s ease-in-out infinite;z-index:15;}
+.sk1{top:52px;left:168px;animation-delay:0s;}.sk2{top:52px;left:158px;animation-delay:0.4s;}.sk3{bottom:60px;left:165px;animation-delay:0.8s;}
+.gear-svg{width:100%;height:100%;}
+
+/* ══════════════════════════════════════════
+   IRON MAN ARC REACTOR
+   Exact CSS class names & structure from
+   the uploaded index.html + style.css
+   Lives at inset:90px matching inner-cavity
+   ══════════════════════════════════════════ */
+.arc-reactor-host{
+  position:absolute;
+  inset:90px;
+  border-radius:50%;
+  z-index:4;
+  overflow:hidden;
+}
+
+.arc_reactor{
+  position:relative;
+  width:100%;height:100%;
+  border-radius:50%;
+  box-shadow:0 0 50px 15px rgba(2,255,255,0.3),inset 0 0 50px 15px rgba(2,255,255,0.3);
+}
+
+.case_container{
+  width:88%;height:88%;
+  border-radius:50%;
+  position:absolute;
+  margin-left:6%;
+  margin-top:6%;
+}
+
+/* e7: wrapper div */
+.e7{
+  width:95.25%;height:95.25%;
+  position:absolute;left:2.37%;top:2.37%;
+  border:6px solid transparent;
+  background:transparent;
+  border-radius:50%;
+  text-align:center;line-height:100px;
+}
+
+/* semi_arc_3: the 4 nested spinning arcs */
+.semi_arc_3{
+  content:"";
+  position:absolute;
+  width:94%;height:94%;
+  left:3%;top:3%;
+  border:5px solid #02feff;
+  border-radius:50%;
+  box-sizing:border-box;
+  animation:ireact_cw 4s linear infinite;
+  text-align:center;line-height:129px;
+}
+.e5_1{
+  color:rgba(2,255,255,0.15);
+  border:2px solid;
+  border-left:2px solid transparent;
+  animation:ireact_cw 5s linear infinite;
+}
+.e5_2{
+  color:rgba(2,255,255,0.7);
+  border:4px solid;
+  border-left:4px solid transparent;
+  border-right:4px solid transparent;
+  animation:ireact_ccw 4s linear infinite;
+}
+.e5_3{
+  color:rgba(2,255,255,0.5);
+  border:2px solid;
+  border-left:2px solid transparent;
+  border-right:2px solid transparent;
+  animation:ireact_cw 3s linear infinite;
+}
+.e5_4{
+  color:rgba(2,255,255,0.15);
+  border:4px solid;
+  border-left:4px solid transparent;
+  border-right:4px solid transparent;
+  border-bottom:4px solid transparent;
+  animation:ireact_ccw 2s linear infinite;
+}
+
+/* core2: glowing center orb */
+.core2{
+  background:#cedce0;
+  width:52%;height:52%;
+  border-radius:50%;
+  border:5px solid rgba(2,255,255,0.15);
+  animation:ireact_flicker2 0.2s infinite;
+  position:absolute;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+}
+
+/* marks: 60 tick marks around rim */
+.marks{
+  list-style:none;margin:0;padding:0;
+  position:absolute;inset:0;
+}
+.marks li{
+  display:block;
+  width:3px;height:9px;
+  background:rgba(2,254,255,0.8);
+  position:absolute;
+  top:50%;left:50%;
+  margin-left:-1.5px;
+  margin-top:-4.5px;
+  animation:ireact_colour_ease2 3s infinite ease-in-out;
+}
+
+@keyframes ireact_cw    {0%{transform:rotateZ(0deg);}  100%{transform:rotateZ(360deg);}}
+@keyframes ireact_ccw   {0%{transform:rotateZ(360deg);}100%{transform:rotateZ(0deg);}}
+@keyframes ireact_flicker2{
+  0%  {box-shadow:0 0 60px 25px rgba(150,255,255,0.5),inset 0 1px 4px 2px rgba(21,211,233,0.3);}
+  40% {box-shadow:0 0 60px 25px rgba(150,255,255,0.5),inset 0 1px 4px 2px rgba(21,211,233,0.3);}
+  50% {box-shadow:0 0 50px 17px rgba(150,255,255,0.5),inset 0 1px 100px 2px rgba(21,211,233,0.3);}
+  60% {box-shadow:0 0 60px 25px rgba(150,255,255,0.5),inset 0 1px 4px 2px rgba(21,211,233,0.3);}
+  100%{box-shadow:0 0 60px 25px rgba(150,255,255,0.5),inset 0 1px 4px 2px rgba(21,211,233,0.3);}
+}
+@keyframes ireact_colour_ease2{
+  0%  {background:#02feff;}
+  50% {background:rgba(2,254,255,0.3);}
+  100%{background:#02feff;}
+}
+
+/* N on top of reactor */
+.data-panel{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);width:130px;background:rgba(0,8,20,0.97);border:1px solid rgba(114,220,255,0.65);border-radius:6px;padding:4px 10px;text-align:center;box-shadow:0 0 14px rgba(114,220,255,0.45);z-index:10;}
+.data-num{font-size:22px;font-weight:900;color:#72dcff;line-height:1;text-shadow:0 0 10px #72dcff;}
+.data-label{font-size:7px;font-weight:700;letter-spacing:0.15em;color:rgba(114,220,255,0.8);text-transform:uppercase;}
+.nerd-label{position:absolute;top:10px;left:50%;transform:translateX(-50%);font-size:8px;font-weight:800;letter-spacing:0.3em;color:#777;text-transform:uppercase;white-space:nowrap;z-index:10;}
+
+
+/* ── EMBEDDED CORE VIDEO ── */
+.core-video-shell{
+  position:absolute;
+  inset:108px;
+  border-radius:50%;
+  z-index:5;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  pointer-events:none;
+  box-shadow:
+    0 0 8px rgba(114,220,255,0.14),
+    inset 0 0 10px rgba(114,220,255,0.08),
+    inset 0 0 24px rgba(0,0,0,0.35);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(114,220,255,0.04) 0%, rgba(4,12,20,0.10) 60%, rgba(0,0,0,0.28) 100%);
+}
+.core-video-shell::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:50%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(114,220,255,0.03) 0%, rgba(114,220,255,0.02) 32%, rgba(0,0,0,0) 50%),
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 72%, rgba(0,0,0,0.20) 88%, rgba(0,0,0,0.48) 100%);
+  box-shadow:
+    inset 0 0 8px rgba(114,220,255,0.08),
+    inset 0 0 20px rgba(0,0,0,0.22);
+  pointer-events:none;
+}
+.core-video-shell::after{
+  content:"";
+  position:absolute;
+  inset:7%;
+  border-radius:50%;
+  border:1px solid rgba(114,220,255,0.18);
+  box-shadow:
+    0 0 8px rgba(114,220,255,0.08),
+    inset 0 0 8px rgba(114,220,255,0.05);
+  pointer-events:none;
+}
+.core-video{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:center center;
+  border-radius:50%;
+  filter:
+    saturate(1.05)
+    contrast(1.04)
+    brightness(0.94)
+    drop-shadow(0 0 4px rgba(114,220,255,0.08));
+  mix-blend-mode:screen;
+  opacity:0.98;
+  transform:scale(0.84);
+}
+.core-video-mask{
+  position:absolute;
+  inset:0;
+  border-radius:50%;
+  overflow:hidden;
+}
+.core-video-vignette{
+  position:absolute;
+  inset:0;
+  border-radius:50%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 64%, rgba(0,8,14,0.06) 82%, rgba(0,0,0,0.22) 100%),
+    linear-gradient(180deg, rgba(114,220,255,0.04) 0%, rgba(0,0,0,0) 22%, rgba(0,0,0,0.08) 100%);
+  pointer-events:none;
+}
+.core-video-highlight{
+  position:absolute;
+  inset:0;
+  border-radius:50%;
+  background:
+    radial-gradient(circle at 35% 24%, rgba(255,255,255,0.08) 0%, rgba(114,220,255,0.03) 16%, rgba(255,255,255,0) 28%),
+    radial-gradient(circle at 68% 72%, rgba(114,220,255,0.04) 0%, rgba(114,220,255,0) 22%);
+  pointer-events:none;
+}
+
+/* ── ALL SHARED KEYFRAMES ── */
+@keyframes cw    {from{transform:rotate(0deg);}   to{transform:rotate(360deg);}}
+@keyframes ccw   {from{transform:rotate(360deg);} to{transform:rotate(0deg);}}
+@keyframes npulse{0%,100%{text-shadow:0 0 20px #72dcff,0 0 40px rgba(114,220,255,0.8);opacity:0.95;}50%{text-shadow:0 0 30px #72dcff,0 0 60px rgba(114,220,255,1),0 0 100px rgba(114,220,255,0.5);opacity:1;}}
+@keyframes streak{0%,100%{opacity:0;transform:scaleY(0);}50%{opacity:1;transform:scaleY(1);}}
+@keyframes scanbar{0%{top:-10%;opacity:0.8;}100%{top:110%;opacity:0;}}
+@keyframes glitch{0%{transform:translate(0);text-shadow:-2px 0 #72dcff,2px 0 #ff51fa;}15%{transform:translate(-2px,1px);text-shadow:2px 0 #72dcff,-2px 0 #ff51fa;}30%{transform:translate(1px,-2px);text-shadow:-2px 0 #2ff801,2px 0 #FF8C00;}45%{transform:translate(-1px,2px);}60%{transform:translate(2px,0);text-shadow:2px 0 #72dcff,-2px 0 #ff51fa;}100%{transform:translate(0);text-shadow:-2px 0 #72dcff,2px 0 #ff51fa;}}
+@keyframes alo{0%,100%{opacity:1;}50%{opacity:0.4;}}
+
+/* ── TITLE / AUTH / FOOTER ── */
+.title-row{display:flex;align-items:center;justify-content:center;gap:2px;margin-bottom:6px;}
+.title-row span{font-size:64px;font-weight:900;font-style:italic;line-height:1;filter:drop-shadow(0 0 14px currentColor);}
+.t-n{color:#72dcff;}.t-dot{color:rgba(255,255,255,0.6);font-size:48px;}.t-e{color:#2ff801;}.t-r{color:#ff51fa;}.t-d{color:#FF8C00;}
+.glitch-wrap{animation:glitch 5s infinite linear alternate-reverse;}
+.subtitle{font-size:9px;font-weight:700;letter-spacing:0.4em;color:#2ff801;text-transform:uppercase;text-align:center;margin-bottom:28px;text-shadow:0 0 14px rgba(47,248,1,0.9),0 1px 4px #000;}
+.auth-stack{width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px;}
+.btn-google{width:100%;display:flex;align-items:center;justify-content:center;gap:14px;padding:18px 24px;border-radius:16px;background:rgba(0,8,22,0.88);border:2px solid rgba(114,220,255,0.5);cursor:pointer;transition:all 0.25s;position:relative;overflow:hidden;backdrop-filter:blur(6px);}
+.btn-google:hover{border-color:#72dcff;background:rgba(0,14,36,0.94);box-shadow:0 0 30px rgba(114,220,255,0.28);}
+.btn-google:active{transform:scale(0.98);}
+.btn-google-label{font-size:12px;font-weight:900;letter-spacing:0.22em;color:#72dcff;text-transform:uppercase;font-style:italic;}
+.google-icon{width:20px;height:20px;flex-shrink:0;}
+.btn-neural{width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px 24px;border-radius:16px;background:rgba(0,12,5,0.88);border:2px solid rgba(47,248,1,0.35);cursor:pointer;transition:all 0.25s;gap:8px;backdrop-filter:blur(6px);}
+.btn-neural:hover{border-color:#2ff801;background:rgba(0,18,8,0.94);box-shadow:0 0 30px rgba(47,248,1,0.2);}
+.btn-neural-label{font-size:10px;font-weight:900;letter-spacing:0.2em;color:rgba(47,248,1,0.9);text-transform:uppercase;font-style:italic;}
+.dot-row{display:flex;gap:5px;align-items:center;}
+.dot{width:6px;height:6px;border-radius:50%;}
+.d1{background:#2ff801;box-shadow:0 0 8px #2ff801;animation:alo 1.2s ease-in-out infinite;}.d2{background:rgba(47,248,1,0.3);}.d3{background:rgba(47,248,1,0.1);}
+.divider{width:100%;max-width:360px;display:flex;align-items:center;gap:12px;margin:4px 0;}
+.div-line{flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(114,220,255,0.25),transparent);}
+.div-text{font-size:9px;font-weight:700;letter-spacing:0.2em;color:rgba(255,255,255,0.4);}
+.footer{margin-top:24px;display:flex;flex-direction:column;align-items:center;gap:10px;}
+.footer-row{display:flex;gap:28px;}
+.footer-item{display:flex;align-items:center;gap:6px;font-size:9px;font-weight:700;letter-spacing:0.18em;color:rgba(255,255,255,0.6);text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.9);}
+.fi-dot{width:6px;height:6px;border-radius:50%;}
+.fi-orange{background:#FF8C00;box-shadow:0 0 6px #FF8C00;}.fi-purple{background:#ff51fa;box-shadow:0 0 6px #ff51fa;}
+.vert-line{width:1px;height:36px;background:linear-gradient(180deg,rgba(114,220,255,0.5),transparent);}
+</style>
+</head>
+<body>
+
+<canvas id="lego-canvas"></canvas>
+<div class="vignette"></div>
+<div class="scanline"></div>
+
+<header class="hdr">
+  <div class="hdr-item"><span class="hdr-label">SECURE ACCESS</span><div class="hdr-line hl-blue"></div></div>
+  <div class="hdr-item hdr-right"><span class="hdr-label hdr-green">SUPABASE AUTH</span><div class="hdr-line hl-green"></div></div>
+</header>
+
+<main class="main">
+  <div class="reactor-wrap">
+    <div class="reactor-outer-frame"></div>
+    <div class="bolt bolt-top"></div>
+    <div class="bolt bolt-bot"></div>
+    <div class="accent-light al-tl" style="animation:alo 1.8s ease-in-out infinite;"></div>
+    <div class="accent-light al-tr" style="animation:alo 1.8s 0.3s ease-in-out infinite;"></div>
+    <div class="accent-light al-bl" style="animation:alo 1.8s 0.6s ease-in-out infinite;"></div>
+    <div class="accent-light al-br" style="animation:alo 1.8s 0.9s ease-in-out infinite;"></div>
+    <div class="accent-light al-ml" style="width:6px;height:14px;animation:alo 1.2s 0.2s ease-in-out infinite;"></div>
+    <div class="accent-light al-mr" style="width:6px;height:14px;animation:alo 1.2s 0.7s ease-in-out infinite;"></div>
+    <div class="side-badge badge-left">⚙</div>
+    <div class="side-badge badge-right">AI</div>
+
+    <div class="gear-ring gr-1" style="position:absolute;inset:6px;border-radius:50%;overflow:hidden;">
+      <svg class="gear-svg" viewBox="0 0 328 328" fill="none"><g opacity="0.35" fill="#555"><path d="M164 4 L168 18 L176 18 L180 4 L188 7 L185 21 L193 26 L200 14 L207 19 L201 30 L208 37 L220 32 L224 40 L213 46 L218 55 L230 53 L233 62 L221 65 L223 75 L235 77 L235 86 L222 85 L221 95 L233 100 L230 109 L218 105 L213 114 L224 120 L220 128 L208 123 L201 130 L207 141 L200 146 L193 134 L185 139 L188 153 L180 156 L176 142 L168 142 L164 156 L156 142 L148 142 L144 156 L136 153 L139 139 L131 134 L124 146 L117 141 L123 130 L116 123 L104 128 L100 120 L111 114 L106 105 L94 109 L91 100 L103 95 L102 85 L89 86 L89 77 L101 75 L103 65 L91 62 L94 53 L106 55 L111 46 L100 40 L104 32 L116 37 L123 30 L117 19 L124 14 L131 26 L139 21 L136 7 L144 4 L148 18 L156 18 Z"/></g></svg>
+    </div>
+    <div class="gear-ring gr-2" style="position:absolute;inset:22px;border-radius:50%;overflow:hidden;">
+      <svg class="gear-svg" viewBox="0 0 284 284" fill="none"><g opacity="0.25"><circle cx="142" cy="142" r="138" stroke="#444" stroke-width="2" fill="none" stroke-dasharray="8 6"/><circle cx="142" cy="142" r="128" stroke="#3a3a3a" stroke-width="1.5" fill="none"/></g></svg>
+    </div>
+    <div class="neon-ring nr-cyan"></div>
+    <div class="neon-ring nr-purple"></div>
+    <div class="neon-ring nr-cyan2"></div>
+    <div class="tick-ring" style="position:absolute;inset:44px;">
+      <svg width="100%" height="100%" viewBox="0 0 252 252">
+        <g stroke="rgba(114,220,255,0.8)" stroke-width="1.5">
+          <line x1="126" y1="4" x2="126" y2="14"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(10 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(20 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(30 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(40 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(50 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(60 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(70 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(80 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(90 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(100 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(110 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(120 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(130 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(140 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(150 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(160 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(170 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(180 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(190 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(200 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(210 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(220 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(230 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(240 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(250 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(260 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(270 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(280 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(290 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(300 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(310 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(320 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(330 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(340 126 126)"/><line x1="126" y1="4" x2="126" y2="14" transform="rotate(350 126 126)"/>
+        </g>
+      </svg>
+    </div>
+    <div class="inner-cavity"></div>
+    <div style="position:absolute;inset:44px;border-radius:50%;overflow:hidden;z-index:5;pointer-events:none;"><div class="scan-bar"></div></div>
+
+    <!-- ══════════════════════════
+         IRON MAN ARC REACTOR
+         ══════════════════════════ -->
+    <div class="arc-reactor-host">
+      <div class="arc_reactor">
+        <div class="case_container">
+          <div class="e7">
+            <div class="semi_arc_3 e5_1">
+              <div class="semi_arc_3 e5_2">
+                <div class="semi_arc_3 e5_3">
+                  
+                </div>
+              </div>
+            </div>
+            
+          </div>
+          <ul class="marks" id="arc-marks"></ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="core-video-shell">
+      <div class="core-video-mask">
+        <video class="core-video" autoplay muted loop playsinline preload="auto" webkit-playsinline="true">
+          <source src="neo_boot.mp4" type="video/mp4" />
+        </video>
+      </div>
+      <div class="core-video-vignette"></div>
+      <div class="core-video-highlight"></div>
+    </div>
+    <div class="nerd-label">NERD LAUNCHER</div>
+    <div class="data-panel">
+      <div class="data-num">26</div>
+      <div class="data-label">SYSTEM LAUNCHER: ACTIVE</div>
+    </div>
+    <div class="streak sk1"></div>
+    <div class="streak sk2"></div>
+    <div class="streak sk3"></div>
+  </div>
+
+  <div class="glitch-wrap">
+    <div class="title-row">
+      <span class="t-n">N</span><span class="t-dot">.</span>
+      <span class="t-e">E</span><span class="t-dot">.</span>
+      <span class="t-r">R</span><span class="t-dot">.</span>
+      <span class="t-d">D</span><span class="t-dot">.</span>
+    </div>
+  </div>
+  <div class="subtitle">NEURAL ENVIRONMENT ROBOTIC DIRECTOR</div>
+
+  <div class="auth-stack">
+    <button class="btn-google">
+      <svg class="google-icon" viewBox="0 0 48 48">
+        <path fill="#FFC107" d="M43.6 20H24v8h11.3C33.7 33.5 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 2.9L37 10.7C33.5 7.5 29 5.5 24 5.5 13.8 5.5 5.5 13.8 5.5 24S13.8 42.5 24 42.5c11 0 19.5-8 19.5-18.5 0-1.3-.1-2.7-.4-4z"/>
+        <path fill="#FF3D00" d="M6.3 15l6.6 4.8C14.5 16.1 18.9 13 24 13c3 0 5.7 1.1 7.8 2.9L37 10.7C33.5 7.5 29 5.5 24 5.5c-7.5 0-13.9 4.3-17.7 10.5z"/>
+        <path fill="#4CAF50" d="M24 42.5c5 0 9.4-1.9 12.8-5l-6-5.1C28.9 34 26.6 35 24 35c-5.2 0-9.6-3.4-11.2-8.1l-6.5 5C9.9 38 16.5 42.5 24 42.5z"/>
+        <path fill="#1976D2" d="M43.6 20H24v8h11.3c-.9 2.5-2.5 4.6-4.6 6l6 5.1C40.6 35.7 44 30.3 44 24c0-1.3-.1-2.7-.4-4z"/>
+      </svg>
+      <span class="btn-google-label">GOOGLE SIGN-IN</span>
+    </button>
+    <div class="divider"><div class="div-line"></div><span class="div-text">OR</span><div class="div-line"></div></div>
+    <button class="btn-neural">
+      <span class="btn-neural-label">NEURAL LINK OFFLINE</span>
+      <div class="dot-row"><div class="dot d1"></div><div class="dot d2"></div><div class="dot d3"></div></div>
+    </button>
+  </div>
+
+  <div class="footer">
+    <div class="footer-row">
+      <div class="footer-item"><div class="fi-dot fi-orange"></div>SYSTEM_STABLE_004</div>
+      <div class="footer-item"><div class="fi-dot fi-purple"></div>AES_256_ACTIVE</div>
+    </div>
+    <div class="vert-line"></div>
+  </div>
+</main>
+
+<script>
+/* ── Generate 60 arc reactor tick marks ── */
+(function(){
+  const ul = document.getElementById('arc-marks');
+  /* host is 160px (340 - 2*90), half = 80px, marks at ~70px from center */
+  for(let i = 0; i < 60; i++){
+    const li = document.createElement('li');
+    /* rotate around center then push outward */
+    li.style.transform = `rotate(${i*6}deg) translateY(-64px)`;
+    ul.appendChild(li);
+  }
+})();
+
+
+/* ── Harden circular core video autoplay / loop ── */
+(function(){
+  const coreVideo = document.querySelector('.core-video');
+  if(!coreVideo) return;
+
+  coreVideo.muted = true;
+  coreVideo.defaultMuted = true;
+  coreVideo.loop = true;
+  coreVideo.playsInline = true;
+  coreVideo.setAttribute('muted', '');
+  coreVideo.setAttribute('autoplay', '');
+  coreVideo.setAttribute('loop', '');
+  coreVideo.setAttribute('playsinline', '');
+  coreVideo.setAttribute('webkit-playsinline', 'true');
+
+  const playVideo = () => {
+    const p = coreVideo.play();
+    if(p && typeof p.catch === 'function') p.catch(() => {});
+  };
+
+  coreVideo.addEventListener('loadedmetadata', playVideo, { once:false });
+  coreVideo.addEventListener('canplay', playVideo, { once:false });
+  coreVideo.addEventListener('ended', () => {
+    coreVideo.currentTime = 0;
+    playVideo();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if(!document.hidden) playVideo();
+  });
+  window.addEventListener('focus', playVideo);
+  playVideo();
+})();
+
+/* ════════════════════════════════════════════════
+   RAW WebGL1 — Infinite LEGO plate
+   No external library required.
+   Color palette cycles: hyper-blue → orange → lime
+═════════════════════════════════════════════════ */
+(function(){
+  const canvas = document.getElementById('lego-canvas');
+  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  if(!gl){ console.warn('WebGL not available'); return; }
+
+  /* ── Vertex shader: just a full-screen quad ── */
+  const VERT_SRC = `
+    attribute vec2 a_pos;
+    void main(){ gl_Position = vec4(a_pos, 0.0, 1.0); }
+  `;
+
+  /* ── Fragment shader: full Lego SDF raymarcher with color cycling ── */
+  const FRAG_SRC = `
+    precision highp float;
+    uniform float u_w;
+    uniform float u_h;
+    uniform float u_t;
+    #define ITER 64
+
+    /* Smooth 3-stop palette cycling through hyper-blue, orange, lime */
+    vec3 legoColor(float t){
+      float c = mod(t * 0.024, 3.0);
+      vec3 blue   = vec3(0.02, 0.50, 1.00);
+      vec3 orange = vec3(1.00, 0.42, 0.00);
+      vec3 lime   = vec3(0.28, 1.00, 0.02);
+      if(c < 1.0) return mix(blue,   orange, smoothstep(0.0,1.0,c));
+      if(c < 2.0) return mix(orange, lime,   smoothstep(0.0,1.0,c-1.0));
+                  return mix(lime,   blue,   smoothstep(0.0,1.0,c-2.0));
+    }
+
+    vec3 rayDir(vec2 uv, vec3 cp, vec3 ct){
+      vec3 fwd = normalize(ct - cp);
+      vec3 rgt = normalize(cross(vec3(0,1,0), fwd));
+      vec3 up  = normalize(cross(fwd, rgt));
+      return normalize(uv.x*rgt + uv.y*up + fwd*2.0);
+    }
+
+    float cyl(vec3 p, float h, float r){
+      vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(h, r);
+      return min(max(d.x,d.y),0.0) + length(max(d,0.0));
+    }
+
+    vec3 rep(vec3 p){ return vec3(fract(p.x+0.5)-0.5, p.y, fract(p.z+0.5)-0.5); }
+
+    float sdf(vec3 p){
+      return min(cyl(rep(p), 0.3, 0.25), p.y);
+    }
+
+    float march(vec3 ro, vec3 rd){
+      float t = 0.0;
+      for(int i=0;i<ITER;i++){
+        float h = sdf(ro + rd*t);
+        if(h < 0.0005*t) return t;
+        t += h;
+      }
+      return -1.0;
+    }
+
+    vec3 norm(vec3 p){
+      float c = sdf(p);
+      vec2 e = vec2(0.001,0.0);
+      return normalize(vec3(sdf(p+e.xyy), sdf(p+e.yxy), sdf(p+e.yyx)) - c);
+    }
+
+    float shadow(vec3 ro, vec3 rd, float mn, float mx, float k){
+      float res=1.0, ph=1e10, t=mn;
+      for(int i=0;i<ITER;i++){
+        float h=sdf(ro+rd*t);
+        float y=h*h/(2.0*ph);
+        float d=sqrt(max(0.0, h*h-y*y));
+        res=min(res, k*d/max(0.0,t-y));
+        ph=h;
+        if(res<5e-4||t>=mx) break;
+        t+=h;
+      }
+      return clamp(res,0.0,1.0);
+    }
+
+    float occ(vec3 p, vec3 n){
+      float o=0.0, s=1.0;
+      for(int i=0;i<5;i++){
+        float h=0.001+0.15*float(i)/4.0;
+        float d=sdf(p+h*n);
+        o+=(h-d)*s; s*=0.95;
+      }
+      return clamp(1.0-1.5*o, 0.0, 1.0);
+    }
+
+    float noise(){
+      return fract(sin(dot(gl_FragCoord.xy + sin(u_t), vec2(12.9898,78.233)))*43758.5453);
+    }
+
+    void main(){
+      float ar = u_w/u_h;
+      vec2 uv  = 2.0*(gl_FragCoord.xy/vec2(u_w,u_h) - 0.5);
+      uv.x    *= ar;
+
+      vec3 cp  = vec3(3.5 + sin(u_t*0.1)*4.0, 6.0, -3.0);
+      vec3 ct  = vec3(0.0);
+      vec3 rd  = rayDir(uv, cp, ct);
+      float t  = march(cp, rd);
+      vec3 col = vec3(0.0);
+
+      if(t > 0.0){
+        vec3 mat = legoColor(u_t);           /* <-- LIVE COLOR */
+        vec3 pos = cp + rd*t;
+        vec3 nr  = norm(pos);
+        vec3 lig = normalize(vec3(sin(u_t*0.01)*5.0, 10.0, 5.6));
+        float dif= clamp(dot(nr,lig),0.0,1.0) * shadow(pos,lig,1e-5,3.0,32.0);
+        col = mat * 4.0 * dif;
+        float ao = occ(pos, nr);
+        float amb= clamp(0.5+0.5*nr.y, 0.0, 1.0);
+        col += mat * amb * ao * vec3(0.04);
+        col *= exp(-0.0005*t*t*t);
+      }
+
+      /* gamma + subtle film grain */
+      col = pow(col, vec3(1.0/2.2));
+      col = mix(col, vec3(noise()), 0.0125);
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `;
+
+  function mkShader(type, src){
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+      console.error('Shader compile error:', gl.getShaderInfoLog(s));
+    return s;
+  }
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, mkShader(gl.VERTEX_SHADER,   VERT_SRC));
+  gl.attachShader(prog, mkShader(gl.FRAGMENT_SHADER, FRAG_SRC));
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS))
+    console.error('Program link error:', gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+
+  /* Full-screen quad */
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([1,1, -1,1, 1,-1, -1,-1]), gl.STATIC_DRAW);
+  const aPos = gl.getAttribLocation(prog, 'a_pos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  const uW = gl.getUniformLocation(prog, 'u_w');
+  const uH = gl.getUniformLocation(prog, 'u_h');
+  const uT = gl.getUniformLocation(prog, 'u_t');
+
+  function resize(){
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function loop(ts){
+    gl.uniform1f(uW, canvas.width);
+    gl.uniform1f(uH, canvas.height);
+    gl.uniform1f(uT, ts * 0.005);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

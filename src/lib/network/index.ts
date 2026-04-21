@@ -1,0 +1,142 @@
+/**
+ * Public entry point for the N.E.O. network / device intelligence foundation.
+ *
+ * Consumers (UI, scan engine, assistant grounding) should import from
+ * `src/lib/network` rather than the individual repository files to keep this
+ * layer swappable.
+ */
+
+export type {
+  DeviceActionResult,
+  DeviceActionState,
+  DeviceActionType,
+  DeviceCategory,
+  DiscoverySourceKind,
+  DeviceEvent,
+  DeviceEventCreateInput,
+  DeviceEventType,
+  DeviceObservationInput,
+  FieldProvenanceState,
+  NativeDeviceObservation,
+  ObservationField,
+  DeviceRecord,
+  DeviceStateUpdate,
+  DeviceStatus,
+  NetworkSummary,
+  ScanSnapshot,
+  ScanSnapshotCreateInput,
+  ScanSnapshotFinalizeInput,
+  ScanStatus,
+} from './types';
+
+export {
+  deleteDevice,
+  findDeviceByIdentity,
+  getDevice,
+  listDevices,
+  markDeviceOffline,
+  updateDeviceState,
+  upsertDeviceFromObservation,
+} from './devicesRepository';
+
+export {
+  createScanSnapshot,
+  finalizeScanSnapshot,
+  getLastScanSnapshot,
+  getScanSnapshot,
+  listRecentScanSnapshots,
+} from './scansRepository';
+
+export {
+  countRecentDeviceEvents,
+  createDeviceEvent,
+  listEventsForDevice,
+  listRecentDeviceEvents,
+} from './eventsRepository';
+
+export { fetchNetworkSummary, summarizeDevices } from './networkSummary';
+
+export type {
+  BrowserProbeResult,
+  NetworkInformationSnapshot,
+  PlatformCapabilities,
+} from './scanTypes';
+
+export type {
+  NetworkScanResult,
+  RawDiscoveryResult,
+  ScanCoordinatorStatus,
+} from './scanService';
+
+export {
+  evaluatePlatformCapabilities,
+  isNetworkScanRunning,
+  scanCoordinator,
+  startNetworkScan,
+} from './scanService';
+
+export type { DiscoveryAvailabilityState } from './discovery/capability';
+
+export { evaluateDiscoveryAvailability, selectDiscoveryProvider } from './discovery/capability';
+
+export type {
+  BrowserSafeDiscoveryProvider,
+  DiscoveryCollectionResult,
+  NativeAndroidDiscoveryProvider,
+  NetworkDiscoveryProvider,
+} from './discovery/providers';
+
+export {
+  browserSafeDiscoveryProvider,
+} from './discovery/browserSafeDiscovery';
+
+export {
+  nativeAndroidDiscoveryProvider,
+} from './discovery/nativeAndroidDiscovery';
+
+export {
+  normalizeNativeObservationToDeviceInput,
+  normalizeNativeObservations,
+} from './discovery/normalize';
+
+export type {
+  DeviceActionRequest,
+  DeviceHttpProbeOptions,
+} from './deviceActions';
+
+export {
+  checkDevicePort,
+  checkDeviceReachability,
+  executeDeviceAction,
+  openDeviceInterface,
+  setDeviceFavorite,
+  setDeviceIgnored,
+  setDeviceTrusted,
+  updateDeviceLabelAction,
+  updateDeviceNotesAction,
+  wakeDevice,
+} from './deviceActions';
+
+export type {
+  AssistantDeviceBrief,
+  AssistantNetworkIntel,
+  AssistantRecommendation,
+  AssistantRecommendationPriority,
+} from './assistantIntelligence';
+
+export {
+  fetchAssistantNetworkIntel,
+  formatAssistantNetworkResponse,
+  isNetworkAssistantPrompt,
+} from './assistantIntelligence';
+
+export type {
+  FetchNetworkTimelineOptions,
+  NetworkAlertCategory,
+  NetworkAttentionState,
+  NetworkTimelineItem,
+  NetworkTimelineSourceType,
+  NetworkTimelineSummary,
+} from './changeTimeline';
+
+export { fetchNetworkTimeline } from './changeTimeline';

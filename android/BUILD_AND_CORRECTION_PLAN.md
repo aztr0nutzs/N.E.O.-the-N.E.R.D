@@ -92,7 +92,7 @@ Make the UI behave cleanly under auth/network failures.
 - verify all protected AI actions handle missing auth cleanly
 - verify all server error cases render clean user-facing messages
 - verify chat/image/video UI states do not hang on failure
-- verify Firebase sign-in/out transitions are smooth
+- verify Supabase sign-in/out transitions are smooth (web and native)
 
 ## Phase 5 - UI polish pass
 ### Goal

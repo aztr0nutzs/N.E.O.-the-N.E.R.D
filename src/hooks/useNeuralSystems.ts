@@ -14,6 +14,8 @@ const devError = (...args: unknown[]) => {
 export function useNeuralSystems() {
   const [audioData, setAudioData] = useState<Uint8Array>(new Uint8Array(0));
   const [isSystemsReady, setIsSystemsReady] = useState(false);
+  const [systemsWarning, setSystemsWarning] = useState<string | null>(null);
+  const [systemsError, setSystemsError] = useState<string | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const audioBufferRef = useRef<Uint8Array | null>(null);
   const lastAudioSampleRef = useRef(0);
@@ -59,10 +61,16 @@ export function useNeuralSystems() {
 
   const startSystems = useCallback(async () => {
     devLog("Initializing Neural Systems...");
+    setSystemsWarning(null);
+    setSystemsError(null);
     try {
       initSpeechRecognition();
-      await initMediaStream();
+      const mediaState = await initMediaStream();
       initMotionDetection();
+
+      if (!mediaState.audioEnabled) {
+        setSystemsWarning('Microphone capture is unavailable on this device session. Vision sensors are live.');
+      }
 
       setIsSystemsReady(true);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
@@ -71,6 +79,7 @@ export function useNeuralSystems() {
     } catch (err) {
       devError("Failed to initialize neural systems:", err);
       setIsSystemsReady(false);
+      setSystemsError(err instanceof Error ? err.message : 'Local sensor startup failed.');
     }
   }, [initSpeechRecognition, initMediaStream, initMotionDetection, update]);
 
@@ -82,5 +91,5 @@ export function useNeuralSystems() {
     };
   }, [cleanupSpeechRecognition, cleanupMediaStream]);
 
-  return { audioData, userPosition, isSystemsReady, isListening, lastTranscript, startSystems, toggleListening };
+  return { audioData, userPosition, isSystemsReady, isListening, lastTranscript, systemsWarning, systemsError, startSystems, toggleListening };
 }

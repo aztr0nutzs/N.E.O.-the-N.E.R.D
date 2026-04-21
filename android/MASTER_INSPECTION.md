@@ -17,7 +17,7 @@ This branch is already in a good state. Inspection work must therefore focus on:
 3. `npm run lint` passes.
 4. `npm run build` passes.
 5. `/api/ai/*` routes remain server-routed, rate-limited, and auth-protected.
-6. The client still uses real Firebase ID tokens for protected AI calls.
+6. The client still uses a valid **Supabase access token** (JWT) for protected AI calls.
 7. No client-side Gemini API key path has been reintroduced.
 8. Protected UI composition remains intact.
 
@@ -62,12 +62,12 @@ Check:
 - auth enforcement
 - validation strictness
 
-### Firebase / Auth
+### Supabase / Auth
 Check:
-- redirect-based login flow
+- Google sign-in flow (web + Capacitor as applicable)
 - token retrieval before protected AI calls
 - sign-out path
-- Firestore error handling
+- Postgres/RLS error handling in UI
 
 ### UI / Visual Stability
 Check:
@@ -97,7 +97,7 @@ Always inspect at minimum:
 - `src/components/Robot2D.tsx`
 - `src/components/Robot3D.tsx`
 - `src/components/ChatInterface.tsx`
-- `src/firebase.ts`
+- `src/authClient.ts`
 - `server.ts`
 - `src/hooks/useNeuralSystems.ts`
 - `src/hooks/useSpeechRecognition.ts`

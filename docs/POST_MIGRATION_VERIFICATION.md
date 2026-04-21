@@ -35,7 +35,10 @@ npm run build
 - expired/invalid token fails with auth message, not server crash
 
 ## Cleanup checks
-- no runtime imports from `firebase` remain
+
+On this Supabase-first branch, confirm:
+
+- no runtime imports from the `firebase` npm package remain
 - no runtime imports from `firebase-admin` remain
-- no active references to `firebase-applet-config.json`
-- package no longer depends on Firebase libraries after migration
+- no active references to legacy Firebase-only config filenames (for example `firebase-applet-config.json`) in runtime or build config
+- `package.json` does not list Firebase libraries for the app runtime

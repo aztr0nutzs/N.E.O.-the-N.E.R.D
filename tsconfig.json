@@ -25,6 +25,7 @@
   },
   "exclude": [
     "templates",
-    "dist"
+    "dist",
+    "android/nerd_login"
   ]
 }

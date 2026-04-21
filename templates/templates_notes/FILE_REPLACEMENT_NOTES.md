@@ -9,7 +9,7 @@ These templates are reference starting points, not blind drop-ins.
 - `firestore.rules` -> remove after Supabase cutover
 
 ## Replace in place
-- `src/firebase.ts` -> replace with Supabase auth/api helper module or split into `src/lib/supabase.ts` + `src/lib/authApi.ts`
+- `src/authClient.ts` -> Supabase auth/session helpers + protected `fetch` (current); legacy forks may still have `src/firebase.ts` — consolidate on `authClient` + `src/lib/supabase.ts`
 - `src/context/NeuralContext.tsx` -> swap Firebase `onAuthStateChanged` for Supabase `onAuthStateChange`
 - `server.ts` -> replace Firebase Admin auth verification with Supabase token verification
 - `src/components/TaskLog.tsx` -> replace Firestore CRUD with Supabase table operations

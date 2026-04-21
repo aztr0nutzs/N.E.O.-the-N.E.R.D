@@ -1,9 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Terminal, Image as ImageIcon, Search, MapPin, Brain, Zap, Video, Mic, Volume2, X, Cpu, Shield, Trash2 } from 'lucide-react';
+import { Send, Terminal, Image as ImageIcon, Search, MapPin, Brain, Zap, Video, Mic, Volume2, X, Cpu, Shield, Trash2, ChevronDown, ChevronUp, Settings as SettingsIcon } from 'lucide-react';
 
-import { auth, fetchProtectedJson, getClientSafeMessage, handleFirestoreError, OperationType } from '../firebase';
+import { fetchProtectedJson, getClientSafeMessage, handleDatabaseAccessError, OperationType } from '../authClient';
 import { Persona, useNeuralAuth, useNeuralSystem, useNeuralUi } from '../context/NeuralContext';
 import { supabase } from '../lib/supabase';
+import {
+  fetchAssistantNetworkIntel,
+  formatAssistantNetworkResponse,
+  isNetworkAssistantPrompt,
+} from '../lib/network';
 
 interface Message {
   id?: string;
@@ -62,6 +67,8 @@ const HISTORY_SYNC_MESSAGE = 'Mission log sync unavailable. Local display may be
 const VIDEO_POLL_INTERVAL_MS = 5000;
 const MAX_VIDEO_POLL_ATTEMPTS = 24;
 const REMOTE_FETCH_TIMEOUT_MS = 60000;
+/** Matches `messages_image_url_len` / `messages_video_url_len` in Supabase schema (2000). */
+const MAX_PERSISTED_MEDIA_URL_LENGTH = 2000;
 
 interface AiChatResponse {
   error?: string;
@@ -94,7 +101,20 @@ interface AiVideoStatusResponse {
   };
 }
 
-export function ChatInterface() {
+interface ChatInterfaceProps {
+  minimized?: boolean;
+  onToggleMinimized?: () => void;
+  onOpenSettings?: () => void;
+  /** Opens unified mission shell on the Assistant tab (command center). */
+  onOpenAssistantMission?: () => void;
+}
+
+export function ChatInterface({
+  minimized = false,
+  onToggleMinimized,
+  onOpenSettings,
+  onOpenAssistantMission,
+}: ChatInterfaceProps = {}) {
   const { user } = useNeuralAuth();
   const { isListening, toggleListening, lastTranscript } = useNeuralSystem();
   const { setNeuralSurge, aiSettings, setCurrentModel } = useNeuralUi();
@@ -109,6 +129,7 @@ export function ChatInterface() {
   
   const userId = user?.id;
   const requestVersionRef = useRef(0);
+  const messagesLoadGenerationRef = useRef(0);
 
   useEffect(() => {
     let modelName = 'gemini-3-flash-preview';
@@ -139,10 +160,13 @@ export function ChatInterface() {
 
   useEffect(() => {
     let isMounted = true;
+    const loadGeneration = ++messagesLoadGenerationRef.current;
 
     if (!userId) {
       setMessages([{ role: 'assistant', content: DEFAULT_GREETING }]);
-      return;
+      return () => {
+        isMounted = false;
+      };
     }
 
     const loadMessages = async () => {
@@ -158,8 +182,11 @@ export function ChatInterface() {
           throw error;
         }
 
+        if (!isMounted || loadGeneration !== messagesLoadGenerationRef.current) {
+          return;
+        }
+
         const loadedMessages = (data as MessageRow[] | null)?.map(mapMessageRow) ?? [];
-        if (!isMounted) return;
 
         if (loadedMessages.length === 0) {
           setMessages([{ role: 'assistant', content: DEFAULT_GREETING }]);
@@ -167,10 +194,13 @@ export function ChatInterface() {
           setMessages(loadedMessages);
         }
       } catch (error) {
+        if (!isMounted || loadGeneration !== messagesLoadGenerationRef.current) {
+          return;
+        }
         try {
-          handleFirestoreError(error, OperationType.LIST, path);
+          handleDatabaseAccessError(error, OperationType.LIST, path);
         } catch (handledError) {
-          if (isMounted) {
+          if (isMounted && loadGeneration === messagesLoadGenerationRef.current) {
             setMessages([{ role: 'assistant', content: `${HISTORY_SYNC_MESSAGE} ${getClientSafeMessage(handledError)}` }]);
           }
         }
@@ -349,35 +379,48 @@ export function ChatInterface() {
     window.speechSynthesis.speak(utterance);
   };
 
-  const saveMessage = async (msg: Message) => {
-    if (!userId) return false;
+  const persistableMediaFields = (msg: Message) => {
+    const imageUrl =
+      msg.imageUrl && msg.imageUrl.length <= MAX_PERSISTED_MEDIA_URL_LENGTH ? msg.imageUrl : null;
+    const videoUrl =
+      msg.videoUrl && msg.videoUrl.length <= MAX_PERSISTED_MEDIA_URL_LENGTH ? msg.videoUrl : null;
+    return { image_url: imageUrl, video_url: videoUrl };
+  };
+
+  const saveMessage = async (msg: Message): Promise<{ ok: boolean; id?: string }> => {
+    if (!userId) return { ok: false };
     const newId = Date.now().toString() + Math.random().toString(36).substring(7);
     const path = `messages/${newId}`;
+    const media = persistableMediaFields(msg);
     try {
-      const { error } = await supabase.from('messages').insert({
-        id: newId,
-        user_id: userId,
-        role: msg.role,
-        content: msg.content,
-        image_url: msg.imageUrl ?? null,
-        video_url: msg.videoUrl ?? null,
-        audio_data: msg.audioData ?? null,
-      });
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          id: newId,
+          user_id: userId,
+          role: msg.role,
+          content: msg.content,
+          image_url: media.image_url,
+          video_url: media.video_url,
+          audio_data: msg.audioData ?? null,
+        })
+        .select('id')
+        .single();
 
       if (error) {
         throw error;
       }
 
-      return true;
+      return { ok: true, id: data?.id };
     } catch (error) {
       try {
-        handleFirestoreError(error, OperationType.CREATE, path);
+        handleDatabaseAccessError(error, OperationType.CREATE, path);
       } catch (handledError) {
         if (import.meta.env.DEV) {
           console.error('Message persistence failed:', handledError);
         }
       }
-      return false;
+      return { ok: false };
     }
   };
 
@@ -425,7 +468,7 @@ export function ChatInterface() {
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if ((!input.trim() && !selectedFile) || isLoading) return;
-    if (!userId || !auth.currentUser) {
+    if (!userId) {
       appendLocalAssistantMessage(SIGNED_OUT_MESSAGE);
       return;
     }
@@ -453,7 +496,34 @@ export function ChatInterface() {
 
       const newUserMsg: Message = { role: 'user', content: userMessage, imageUrl: fileDataUrl };
       setMessages(prev => [...prev, newUserMsg]);
-      await saveMessage(newUserMsg);
+      const userSave = await saveMessage(newUserMsg);
+      if (userSave.id) {
+        setMessages(prev =>
+          prev.map((m, i) => (i === prev.length - 1 && m.role === 'user' && !m.id ? { ...m, id: userSave.id } : m))
+        );
+      }
+
+      if ((mode === 'standard' || mode === 'think' || mode === 'fast') && isNetworkAssistantPrompt(userMessage)) {
+        const intel = await fetchAssistantNetworkIntel(userId);
+        if (!isRequestCurrent(requestVersion)) return;
+
+        const networkResponse = formatAssistantNetworkResponse(intel, userMessage);
+        const networkAssistantMsg: Message = {
+          role: 'assistant',
+          content: networkResponse,
+        };
+
+        setMessages(prev => [...prev, networkAssistantMsg]);
+        const networkSave = await saveMessage(networkAssistantMsg);
+        if (networkSave.id) {
+          setMessages(prev =>
+            prev.map((m, i) =>
+              i === prev.length - 1 && m.role === 'assistant' && !m.id ? { ...m, id: networkSave.id } : m
+            )
+          );
+        }
+        return;
+      }
 
       let responseText = '';
       let generatedImageUrl = '';
@@ -605,7 +675,14 @@ export function ChatInterface() {
       };
 
       setMessages(prev => [...prev, newAssistantMsg]);
-      await saveMessage(newAssistantMsg);
+      const assistantSave = await saveMessage(newAssistantMsg);
+      if (assistantSave.id) {
+        setMessages(prev =>
+          prev.map((m, i) =>
+            i === prev.length - 1 && m.role === 'assistant' && !m.id ? { ...m, id: assistantSave.id } : m
+          )
+        );
+      }
 
       if (mode === 'tts') {
         speakText(responseText);
@@ -622,7 +699,14 @@ export function ChatInterface() {
         content: getClientSafeMessage(error, 'Connection to main servers disrupted. Please try again.')
       };
       setMessages(prev => [...prev, errorMsg]);
-      await saveMessage(errorMsg);
+      const errorSave = await saveMessage(errorMsg);
+      if (errorSave.id) {
+        setMessages(prev =>
+          prev.map((m, i) =>
+            i === prev.length - 1 && m.role === 'assistant' && !m.id ? { ...m, id: errorSave.id } : m
+          )
+        );
+      }
     } finally {
       if (!isRequestCurrent(requestVersion)) return;
       setIsLoading(false);
@@ -651,9 +735,28 @@ export function ChatInterface() {
 
   const activeColor = PERSONA_CONFIGS[persona].color;
 
+  if (minimized) {
+    return (
+      <div className="pointer-events-auto w-full h-full flex items-end justify-center px-4">
+        <button
+          type="button"
+          onClick={onToggleMinimized}
+          aria-label="Expand chat"
+          title="Expand chat"
+          className={`pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-full bg-[linear-gradient(180deg,rgba(21,24,31,0.95),rgba(14,17,23,0.98))] border border-${activeColor}/40 text-${activeColor} font-mono text-[10px] tracking-[0.22em] uppercase shadow-[0_10px_30px_rgba(0,0,0,0.45)] hover:bg-white/5 transition-all`}
+        >
+          <Cpu className="w-3.5 h-3.5" />
+          <span>{PERSONA_CONFIGS[persona].name}</span>
+          <span className="opacity-60">· Tap to chat</span>
+          <ChevronUp className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div 
-      className="flex flex-col h-full w-full relative group p-1"
+      className="flex flex-col h-full min-h-0 w-full relative group p-1"
     >
       {/* Heavy Industrial Frame */}
       <div className="absolute inset-0 bg-[linear-gradient(180deg,#1b1f27,#14171d)] border-[3px] border-[#3a3f47] rounded-xl shadow-[0_18px_42px_rgba(0,0,0,0.42)] overflow-hidden -z-10">
@@ -691,6 +794,39 @@ export function ChatInterface() {
           <button onClick={clearHistory} className="text-gray-500 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 rounded-sm p-1 transition-all" title="Clear History">
             <Trash2 className="w-3 h-3" />
           </button>
+          {onOpenAssistantMission && (
+            <button
+              type="button"
+              onClick={onOpenAssistantMission}
+              className="rounded-sm border border-transparent p-1 text-gray-500 transition-all hover:border-cyan-500/30 hover:bg-cyan-500/10 hover:text-cyan-300"
+              title="Assistant mission hub (command center)"
+              aria-label="Open assistant mission hub"
+            >
+              <Brain className="h-3 w-3" />
+            </button>
+          )}
+          {onOpenSettings && (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="text-gray-500 hover:text-cyber-blue hover:bg-cyber-blue/10 border border-transparent hover:border-cyber-blue/20 rounded-sm p-1 transition-all"
+              title="AI configuration"
+              aria-label="Open AI configuration"
+            >
+              <SettingsIcon className="w-3 h-3" />
+            </button>
+          )}
+          {onToggleMinimized && (
+            <button
+              type="button"
+              onClick={onToggleMinimized}
+              className="text-gray-500 hover:text-cyber-blue hover:bg-cyber-blue/10 border border-transparent hover:border-cyber-blue/20 rounded-sm p-1 transition-all"
+              title="Minimize chat"
+              aria-label="Minimize chat"
+            >
+              <ChevronDown className="w-3 h-3" />
+            </button>
+          )}
           <div className={`text-[10px] font-mono text-${activeColor} animate-pulse flex items-center gap-1 tracking-[0.18em]`}>
             <Shield className="w-3 h-3" /> SECURE LINK
           </div>

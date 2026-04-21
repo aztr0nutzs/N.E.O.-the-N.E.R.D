@@ -28,14 +28,30 @@ const apiLimiter = rateLimit({
   message: { error: "Too many requests, please try again later." }
 });
 
+function extractBearerToken(authHeader: string | undefined): string | null {
+  if (typeof authHeader !== 'string') return null;
+  const trimmed = authHeader.trim();
+  if (!trimmed.toLowerCase().startsWith('bearer ')) return null;
+  const token = trimmed.slice(7).trim();
+  return token.length > 0 ? token : null;
+}
+
+function logAuthFailure(message: string, error: unknown) {
+  if (error && typeof error === 'object' && 'message' in error) {
+    const code = 'code' in error && typeof (error as { code?: unknown }).code === 'string' ? (error as { code: string }).code : undefined;
+    console.error(message, code ? { code, message: (error as { message: string }).message } : { message: String((error as { message: unknown }).message) });
+    return;
+  }
+  console.error(message, { detail: typeof error });
+}
+
 // Auth Middleware
 const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const token = extractBearerToken(req.headers.authorization);
+  if (!token) {
     return res.status(401).json({ error: "Unauthorized: Missing or invalid token" });
   }
-  
-  const token = authHeader.split('Bearer ')[1];
+
   try {
     if (!supabaseAdmin) {
       console.error("Supabase auth verification is not configured.");
@@ -44,14 +60,14 @@ const requireAuth = async (req: express.Request, res: express.Response, next: ex
 
     const { data, error } = await supabaseAdmin.auth.getUser(token);
     if (error || !data.user) {
-      console.error("Auth error:", error);
+      logAuthFailure("Auth verification failed:", error ?? new Error("missing user"));
       return res.status(401).json({ error: "Unauthorized: Invalid token" });
     }
 
     (req as any).user = data.user;
     next();
   } catch (error) {
-    console.error("Auth error:", error);
+    logAuthFailure("Auth verification failed:", error);
     return res.status(401).json({ error: "Unauthorized: Invalid token" });
   }
 };
@@ -91,6 +107,23 @@ const MAX_INLINE_DATA_CHARS = 10_485_760;
 const MAX_PROMPT_CHARS = 2_000;
 const MAX_TOOLS = 2;
 const MAX_OPERATION_ID_LENGTH = 128;
+const CHAT_CONFIG_KEYS = [
+  'temperature',
+  'maxOutputTokens',
+  'systemInstruction',
+  'responseModalities',
+  'speechConfig',
+  'thinkingConfig',
+  'tools',
+  'topP',
+  'topK',
+] as const;
+const IMAGE_BODY_KEYS = ['prompt', 'config'] as const;
+const IMAGE_CONFIG_KEYS = ['imageConfig', 'personGeneration', 'numberOfImages'] as const;
+const IMAGE_INNER_CONFIG_KEYS = ['aspectRatio', 'imageSize'] as const;
+const VIDEO_BODY_KEYS = ['prompt', 'image', 'config'] as const;
+const VIDEO_CONFIG_KEYS = ['aspectRatio', 'personGeneration', 'numberOfVideos', 'resolution'] as const;
+const CHAT_BODY_KEYS = ['model', 'contents', 'config'] as const;
 const chatJsonParser = express.json({ limit: CHAT_ROUTE_LIMIT });
 const defaultJsonParser = express.json({ limit: DEFAULT_ROUTE_LIMIT });
 
@@ -106,6 +139,13 @@ function isFiniteNumber(value: unknown): value is number {
 
 function isIntegerInRange(value: unknown, min: number, max: number): value is number {
   return Number.isInteger(value) && (value as number) >= min && (value as number) <= max;
+}
+
+function hasOnlyKeys(obj: JsonRecord, allowed: readonly string[]) {
+  const keys = Object.keys(obj);
+  if (keys.length > allowed.length) return false;
+  const allowedSet = new Set(allowed);
+  return keys.every((k) => allowedSet.has(k));
 }
 
 function sendBadRequest(res: express.Response, message: string) {
@@ -138,12 +178,12 @@ function validateSystemInstruction(value: unknown) {
     return instruction;
   }
 
-  if (!isPlainObject(value) || !Array.isArray(value.parts) || value.parts.length === 0 || value.parts.length > MAX_SYSTEM_INSTRUCTION_PARTS) {
+  if (!isPlainObject(value) || !hasOnlyKeys(value, ['parts']) || !Array.isArray(value.parts) || value.parts.length === 0 || value.parts.length > MAX_SYSTEM_INSTRUCTION_PARTS) {
     return null;
   }
 
   const parts = value.parts.map((part) => {
-    if (!isPlainObject(part) || typeof part.text !== 'string') return null;
+    if (!isPlainObject(part) || !hasOnlyKeys(part, ['text']) || typeof part.text !== 'string') return null;
     const text = part.text.trim();
     if (!text || text.length > MAX_SYSTEM_INSTRUCTION_CHARS) return null;
     return { text };
@@ -173,11 +213,15 @@ function validateResponseModalities(value: unknown) {
 }
 
 function validateSpeechConfig(value: unknown, responseModalities: string[] | undefined) {
-  if (!isPlainObject(value) || !responseModalities?.includes('AUDIO')) {
+  if (!isPlainObject(value) || !hasOnlyKeys(value, ['voiceConfig']) || !responseModalities?.includes('AUDIO')) {
     return null;
   }
 
-  if (!isPlainObject(value.voiceConfig) || !isPlainObject(value.voiceConfig.prebuiltVoiceConfig)) {
+  if (!isPlainObject(value.voiceConfig) || !hasOnlyKeys(value.voiceConfig, ['prebuiltVoiceConfig']) || !isPlainObject(value.voiceConfig.prebuiltVoiceConfig)) {
+    return null;
+  }
+
+  if (!hasOnlyKeys(value.voiceConfig.prebuiltVoiceConfig, ['voiceName'])) {
     return null;
   }
 
@@ -201,7 +245,7 @@ function validateSpeechConfig(value: unknown, responseModalities: string[] | und
 }
 
 function validateThinkingConfig(value: unknown) {
-  if (!isPlainObject(value) || typeof value.thinkingLevel !== 'string') {
+  if (!isPlainObject(value) || !hasOnlyKeys(value, ['thinkingLevel']) || typeof value.thinkingLevel !== 'string') {
     return null;
   }
 
@@ -245,7 +289,8 @@ function validateChatContents(value: unknown) {
   }
 
   const safeContents = value.map((content) => {
-    if (!isPlainObject(content) || !Array.isArray(content.parts) || content.parts.length === 0 || content.parts.length > MAX_PARTS_PER_CONTENT) {
+    const contentKeys = content.role !== undefined ? (['role', 'parts'] as const) : (['parts'] as const);
+    if (!isPlainObject(content) || !hasOnlyKeys(content, contentKeys) || !Array.isArray(content.parts) || content.parts.length === 0 || content.parts.length > MAX_PARTS_PER_CONTENT) {
       return null;
     }
 
@@ -263,13 +308,17 @@ function validateChatContents(value: unknown) {
       }
 
       if (hasText) {
-        if (typeof part.text !== 'string' || part.text.length === 0 || part.text.length > MAX_TEXT_PART_CHARS) {
+        if (!hasOnlyKeys(part, ['text']) || typeof part.text !== 'string' || part.text.length === 0 || part.text.length > MAX_TEXT_PART_CHARS) {
           return null;
         }
         return { text: part.text };
       }
 
-      if (!isPlainObject(part.inlineData) || typeof part.inlineData.mimeType !== 'string' || typeof part.inlineData.data !== 'string') {
+      if (!hasOnlyKeys(part, ['inlineData'])) {
+        return null;
+      }
+
+      if (!isPlainObject(part.inlineData) || !hasOnlyKeys(part.inlineData, ['mimeType', 'data']) || typeof part.inlineData.mimeType !== 'string' || typeof part.inlineData.data !== 'string') {
         return null;
       }
 
@@ -304,9 +353,19 @@ function validateChatContents(value: unknown) {
   return safeContents;
 }
 
+function validateTopP(value: unknown) {
+  if (!isFiniteNumber(value) || value < 0 || value > 1) return null;
+  return value;
+}
+
+function validateTopK(value: unknown) {
+  if (!isIntegerInRange(value, 1, 40)) return null;
+  return value;
+}
+
 function validateChatConfig(value: unknown) {
   if (value === undefined) return {};
-  if (!isPlainObject(value)) return null;
+  if (!isPlainObject(value) || !hasOnlyKeys(value, CHAT_CONFIG_KEYS)) return null;
 
   const safeConfig: JsonRecord = {};
 
@@ -318,6 +377,18 @@ function validateChatConfig(value: unknown) {
   if (value.maxOutputTokens !== undefined) {
     if (!isIntegerInRange(value.maxOutputTokens, 1, 8192)) return null;
     safeConfig.maxOutputTokens = value.maxOutputTokens;
+  }
+
+  if (value.topP !== undefined) {
+    const topP = validateTopP(value.topP);
+    if (topP === null) return null;
+    safeConfig.topP = topP;
+  }
+
+  if (value.topK !== undefined) {
+    const topK = validateTopK(value.topK);
+    if (topK === null) return null;
+    safeConfig.topK = topK;
   }
 
   if (value.systemInstruction !== undefined) {
@@ -356,12 +427,12 @@ function validateChatConfig(value: unknown) {
 
 function validateImageConfig(value: unknown) {
   if (value === undefined) return {};
-  if (!isPlainObject(value)) return null;
+  if (!isPlainObject(value) || !hasOnlyKeys(value, IMAGE_CONFIG_KEYS)) return null;
 
   const safeConfig: JsonRecord = {};
 
   if (value.imageConfig !== undefined) {
-    if (!isPlainObject(value.imageConfig)) return null;
+    if (!isPlainObject(value.imageConfig) || !hasOnlyKeys(value.imageConfig, IMAGE_INNER_CONFIG_KEYS)) return null;
 
     const imageConfig: JsonRecord = {};
     if (value.imageConfig.aspectRatio !== undefined) {
@@ -398,7 +469,7 @@ function validateImageConfig(value: unknown) {
 
 function validateVideoImage(value: unknown) {
   if (value === undefined) return undefined;
-  if (!isPlainObject(value)) return null;
+  if (!isPlainObject(value) || !hasOnlyKeys(value, ['imageBytes', 'mimeType'])) return null;
 
   if (typeof value.imageBytes !== 'string' || value.imageBytes.length === 0 || value.imageBytes.length > MAX_INLINE_DATA_CHARS) {
     return null;
@@ -416,7 +487,7 @@ function validateVideoImage(value: unknown) {
 
 function validateVideoConfig(value: unknown) {
   if (value === undefined) return {};
-  if (!isPlainObject(value)) return null;
+  if (!isPlainObject(value) || !hasOnlyKeys(value, VIDEO_CONFIG_KEYS)) return null;
 
   const safeConfig: JsonRecord = {};
 
@@ -476,7 +547,7 @@ async function startServer() {
   // Chat route needs larger payload for inline images/video
   app.post("/api/ai/chat", chatJsonParser, async (req, res) => {
     try {
-      if (!isPlainObject(req.body)) {
+      if (!isPlainObject(req.body) || !hasOnlyKeys(req.body, CHAT_BODY_KEYS)) {
         return sendBadRequest(res, "Invalid request payload");
       }
 
@@ -510,7 +581,7 @@ async function startServer() {
 
   app.post("/api/ai/image", defaultJsonParser, async (req, res) => {
     try {
-      if (!isPlainObject(req.body)) {
+      if (!isPlainObject(req.body) || !hasOnlyKeys(req.body, IMAGE_BODY_KEYS)) {
         return sendBadRequest(res, "Invalid request payload");
       }
 
@@ -538,7 +609,7 @@ async function startServer() {
 
   app.post("/api/ai/video", chatJsonParser, async (req, res) => {
     try {
-      if (!isPlainObject(req.body)) {
+      if (!isPlainObject(req.body) || !hasOnlyKeys(req.body, VIDEO_BODY_KEYS)) {
         return sendBadRequest(res, "Invalid request payload");
       }
 
@@ -600,7 +671,7 @@ async function startServer() {
       return res.status(400).json({ error: "Malformed JSON payload" });
     }
 
-    return sendBadRequest(res, "Invalid request payload");
+    return res.status(500).json({ error: "Unable to process your request right now." });
   });
 
   // Vite middleware for development

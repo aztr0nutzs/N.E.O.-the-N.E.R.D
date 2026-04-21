@@ -1,0 +1,978 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronRight, ExternalLink, Loader2, Radar, Wifi, WifiOff } from 'lucide-react';
+import { useNeuralAuth } from '../../context/NeuralContext';
+import {
+  checkDeviceReachability,
+  fetchAssistantNetworkIntel,
+  fetchNetworkTimeline,
+  getLastScanSnapshot,
+  listDevices,
+  openDeviceInterface,
+  setDeviceFavorite,
+  setDeviceIgnored,
+  setDeviceTrusted,
+  startNetworkScan,
+  updateDeviceLabelAction,
+  updateDeviceNotesAction,
+  type AssistantDeviceBrief,
+  type AssistantNetworkIntel,
+  type DeviceActionResult,
+  type DeviceRecord,
+  type NetworkScanResult,
+  type NetworkTimelineSummary,
+  type ScanCoordinatorStatus,
+  type ScanSnapshot,
+} from '../../lib/network';
+import type { MissionTab } from './MissionShell';
+
+type NetInfo = {
+  effectiveType?: string;
+  downlink?: number;
+  rtt?: number;
+  saveData?: boolean;
+};
+
+function readNetworkInformation(): NetInfo | null {
+  const c = (navigator as Navigator & { connection?: NetInfo }).connection;
+  if (!c) return null;
+  return {
+    effectiveType: c.effectiveType,
+    downlink: c.downlink,
+    rtt: c.rtt,
+    saveData: c.saveData,
+  };
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function formatLongTime(value: string | null | undefined): string {
+  if (!value) return 'unknown';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatScanTime(scan: ScanSnapshot | null): string {
+  if (!scan) return 'never';
+  const timestamp = scan.finishedAt ?? scan.startedAt;
+  return new Date(timestamp).toLocaleTimeString();
+}
+
+function formatEventTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+function lastScanMetrics(scan: ScanSnapshot | null): Record<string, unknown> | null {
+  return scan?.metrics && typeof scan.metrics === 'object' && !Array.isArray(scan.metrics)
+    ? scan.metrics as Record<string, unknown>
+    : null;
+}
+
+function lastScanPath(scan: ScanSnapshot | null): 'browser_safe' | 'native_android' | null {
+  const metrics = lastScanMetrics(scan);
+  const path = metrics?.scanPath;
+  return path === 'native_android' || path === 'browser_safe' ? path : null;
+}
+
+function discoveryHeroTitle(scan: ScanSnapshot | null): string {
+  return lastScanPath(scan) === 'native_android' ? 'Native Android-backed signals' : 'Browser-visible signals';
+}
+
+function discoveryHeroBody(scan: ScanSnapshot | null): string {
+  return lastScanPath(scan) === 'native_android'
+    ? 'Scan engine can consume bounded native Android reachability observations plus truthful limitation notes.'
+    : 'Scan engine is browser-safe: it records real link/probe signals and never fabricates LAN hosts.';
+}
+
+function discoveryFooterLabel(scan: ScanSnapshot | null): string {
+  return lastScanPath(scan) === 'native_android'
+    ? 'Native Android bounded reachability'
+    : 'Browser-safe sweep - limited visibility';
+}
+
+function discoveryButtonLabel(scan: ScanSnapshot | null, scanStatus: ScanCoordinatorStatus): string {
+  if (scanStatus === 'scanning') {
+    return lastScanPath(scan) === 'native_android' ? 'Scanning native scope' : 'Scanning browser scope';
+  }
+  return 'Run truthful scan';
+}
+
+function discoveryButtonTitle(scan: ScanSnapshot | null, hasUser: boolean): string {
+  if (!hasUser) {
+    return 'Sign in required before scan snapshots can be persisted.';
+  }
+  return lastScanPath(scan) === 'native_android'
+    ? 'Run scan: persists snapshot, native observations when available, and limitation notes.'
+    : 'Run browser-safe scan: persists snapshot, real probes, and limitation notes.';
+}
+
+function discoveryInventoryBody(
+  scan: ScanSnapshot | null,
+  scanResult: NetworkScanResult | null,
+  devicesCount: number,
+): string {
+  const path = scanResult?.scanPath ?? lastScanPath(scan);
+  if (devicesCount > 0) {
+    return path === 'native_android'
+      ? `${devicesCount} Supabase-backed device row(s) exist. Native Android scans can refresh reachable hosts without claiming full LAN coverage. Current scan observed ${scanResult?.discoveredDevices.length ?? 0} device(s).`
+      : `${devicesCount} Supabase-backed device row(s) exist. This browser-safe scan does not mark them online unless a real scanner observes them. Current scan observed ${scanResult?.discoveredDevices.length ?? 0} device(s).`;
+  }
+
+  return path === 'native_android'
+    ? 'No host inventory rows exist yet. Native Android scans can persist bounded reachable-host observations, but they still do not guarantee full LAN enumeration.'
+    : 'No host inventory rows exist yet. This browser-safe scan can persist snapshots and limitations, but it cannot invent LAN devices without a native or server-side scanner.';
+}
+
+function scanBadge(status: ScanCoordinatorStatus): string {
+  if (status === 'idle') return 'ready';
+  if (status === 'scanning') return 'scanning';
+  if (status === 'limited') return 'limited';
+  if (status === 'failed') return 'failed';
+  return 'complete';
+}
+
+function isDeviceRecord(value: unknown): value is DeviceRecord {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    'ipAddress' in value &&
+    typeof (value as { id?: unknown }).id === 'string'
+  );
+}
+
+function actionLabel(actionType: DeviceActionResult['actionType']): string {
+  switch (actionType) {
+    case 'ping':
+      return 'Reachability';
+    case 'open_interface':
+      return 'Open interface';
+    case 'wake_on_lan':
+      return 'Wake-on-LAN';
+    case 'port_check':
+      return 'Port check';
+    case 'trust':
+      return 'Trust';
+    case 'favorite':
+      return 'Favorite';
+    case 'ignore':
+      return 'Ignore';
+    case 'label':
+    case 'rename':
+      return 'Label';
+    case 'notes':
+      return 'Notes';
+    default:
+      return actionType;
+  }
+}
+
+interface Props {
+  onNavigate: (tab: MissionTab) => void;
+  selectedDeviceId?: string | null;
+  onSelectDevice?: (deviceId: string | null) => void;
+}
+
+export function NerdDeviceDiscoveryMission({ onNavigate, selectedDeviceId = null, onSelectDevice }: Props) {
+  const { user } = useNeuralAuth();
+  const [online, setOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [conn, setConn] = useState<NetInfo | null>(() => readNetworkInformation());
+  const [lastRefresh, setLastRefresh] = useState(() => new Date());
+  const [scanStatus, setScanStatus] = useState<ScanCoordinatorStatus>('idle');
+  const [scanResult, setScanResult] = useState<NetworkScanResult | null>(null);
+  const [devices, setDevices] = useState<DeviceRecord[]>([]);
+  const [lastScan, setLastScan] = useState<ScanSnapshot | null>(null);
+  const [timeline, setTimeline] = useState<NetworkTimelineSummary | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [actionBusyKey, setActionBusyKey] = useState<string | null>(null);
+  const [actionResult, setActionResult] = useState<DeviceActionResult | null>(null);
+  const [selectedDeviceIntel, setSelectedDeviceIntel] = useState<AssistantNetworkIntel | null>(null);
+  const [deviceEditor, setDeviceEditor] = useState({ label: '', notes: '' });
+  const [deviceDetailBusy, setDeviceDetailBusy] = useState<string | null>(null);
+  const inventoryRequestRef = useRef(0);
+
+  const selectedDevice = useMemo(
+    () => devices.find((device) => device.id === selectedDeviceId) ?? null,
+    [devices, selectedDeviceId],
+  );
+  const selectedDeviceContext = useMemo(() => {
+    const context = selectedDeviceIntel?.selectedDevice ?? null;
+    return context && context.device.id === selectedDeviceId ? context : null;
+  }, [selectedDeviceId, selectedDeviceIntel]);
+  const selectedDeviceBrief = useMemo<AssistantDeviceBrief | null>(
+    () => selectedDeviceContext?.device ?? null,
+    [selectedDeviceContext],
+  );
+
+  const refreshConn = useCallback(() => {
+    setConn(readNetworkInformation());
+    setLastRefresh(new Date());
+    setOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  }, []);
+
+  const loadNetworkInventory = useCallback(async (preferredSelectedDeviceId?: string | null) => {
+    const requestId = ++inventoryRequestRef.current;
+    if (!user) {
+      setDevices([]);
+      setLastScan(null);
+      setTimeline(null);
+      setSelectedDeviceIntel(null);
+      return;
+    }
+
+    try {
+      const [nextDevices, nextLastScan, nextTimeline] = await Promise.all([
+        listDevices(user.id),
+        getLastScanSnapshot(user.id),
+        fetchNetworkTimeline(user.id, { limit: 8, scanLimit: 4, eventLimit: 16 }),
+      ]);
+      const baseSelectedId = preferredSelectedDeviceId ?? selectedDeviceId;
+      const availableSelectedId = baseSelectedId && nextDevices.some((device) => device.id === baseSelectedId)
+        ? baseSelectedId
+        : nextDevices[0]?.id ?? null;
+      const nextIntel = await fetchAssistantNetworkIntel(user.id, {
+        selectedDeviceId: availableSelectedId ?? undefined,
+      });
+      if (requestId !== inventoryRequestRef.current) {
+        return;
+      }
+      setDevices(nextDevices);
+      setLastScan(nextLastScan);
+      setTimeline(nextTimeline);
+      setSelectedDeviceIntel(nextIntel);
+      if (availableSelectedId !== selectedDeviceId) {
+        onSelectDevice?.(availableSelectedId);
+      }
+    } catch (error) {
+      setScanError(getErrorMessage(error));
+    }
+  }, [onSelectDevice, selectedDeviceId, user]);
+
+  const runScan = useCallback(async () => {
+    refreshConn();
+    if (!user) {
+      setScanError('Sign in is required before scan snapshots can be persisted.');
+      setScanStatus('failed');
+      return;
+    }
+
+    setScanError(null);
+    setScanStatus('scanning');
+    try {
+      const result = await startNetworkScan(user.id);
+      setScanResult(result);
+      setDevices(result.knownDevices);
+      setLastScan(result.scanSnapshot);
+      setScanStatus(result.status);
+      const availableSelectedId = selectedDeviceId && result.knownDevices.some((device) => device.id === selectedDeviceId)
+        ? selectedDeviceId
+        : result.knownDevices[0]?.id ?? null;
+      const refreshRequestId = ++inventoryRequestRef.current;
+      void Promise.all([
+        fetchNetworkTimeline(user.id, { limit: 8, scanLimit: 4, eventLimit: 16 }),
+        fetchAssistantNetworkIntel(user.id, {
+          selectedDeviceId: availableSelectedId ?? undefined,
+        }),
+      ])
+        .then(([nextTimeline, nextIntel]) => {
+          if (refreshRequestId !== inventoryRequestRef.current) {
+            return;
+          }
+          setTimeline(nextTimeline);
+          setSelectedDeviceIntel(nextIntel);
+          if (availableSelectedId !== selectedDeviceId) {
+            onSelectDevice?.(availableSelectedId);
+          }
+        })
+        .catch((error) => setScanError(getErrorMessage(error)));
+    } catch (error) {
+      setScanStatus('failed');
+      setScanError(getErrorMessage(error));
+    }
+  }, [refreshConn, user]);
+
+  const replaceDevice = useCallback((device: DeviceRecord) => {
+    setDevices((prev) => prev.map((item) => (item.id === device.id ? device : item)));
+  }, []);
+
+  const applyActionResult = useCallback((result: DeviceActionResult) => {
+    setActionResult(result);
+    const device = result.data?.device;
+    if (isDeviceRecord(device)) {
+      replaceDevice(device);
+    }
+  }, [replaceDevice]);
+
+  const runDeviceAction = useCallback(async (
+    device: DeviceRecord,
+    action: 'reach' | 'open' | 'trust' | 'favorite' | 'ignore',
+  ) => {
+    if (!user) {
+      setActionResult({
+        actionType: 'ping',
+        deviceId: device.id,
+        state: 'unavailable',
+        success: false,
+        message: 'Sign in is required before device actions can run.',
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const busyKey = `${action}:${device.id}`;
+    setActionBusyKey(busyKey);
+    try {
+      const result =
+        action === 'reach'
+          ? await checkDeviceReachability(user.id, device.id)
+          : action === 'open'
+            ? await openDeviceInterface(user.id, device.id, { device })
+            : action === 'trust'
+              ? await setDeviceTrusted(user.id, device.id, !device.trusted)
+              : action === 'favorite'
+                ? await setDeviceFavorite(user.id, device.id, !device.favorite)
+                : await setDeviceIgnored(user.id, device.id, !device.ignored);
+      applyActionResult(result);
+      void loadNetworkInventory(device.id);
+    } catch (error) {
+      setActionResult({
+        actionType: action === 'reach' ? 'ping' : action === 'open' ? 'open_interface' : action,
+        deviceId: device.id,
+        state: 'unavailable',
+        success: false,
+        message: getErrorMessage(error),
+        timestamp: new Date().toISOString(),
+      });
+    } finally {
+      setActionBusyKey(null);
+    }
+  }, [applyActionResult, loadNetworkInventory, user]);
+
+  const selectAndRunDeviceAction = useCallback((
+    device: DeviceRecord,
+    action: 'reach' | 'open' | 'trust' | 'favorite' | 'ignore',
+  ) => {
+    onSelectDevice?.(device.id);
+    void runDeviceAction(device, action);
+  }, [onSelectDevice, runDeviceAction]);
+
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    const nav = navigator as Navigator & { connection?: EventTarget & NetInfo };
+    const c = nav.connection;
+    const onConn = () => refreshConn();
+    c?.addEventListener?.('change', onConn);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+      c?.removeEventListener?.('change', onConn);
+    };
+  }, [refreshConn]);
+
+  useEffect(() => {
+    void loadNetworkInventory();
+  }, [loadNetworkInventory]);
+
+  useEffect(() => {
+    if (!selectedDevice) {
+      setDeviceEditor({ label: '', notes: '' });
+      return;
+    }
+    setDeviceEditor({
+      label: selectedDevice.label ?? '',
+      notes: selectedDevice.notes ?? '',
+    });
+  }, [selectedDevice]);
+
+  const runDetailAction = useCallback(async (
+    action:
+      | 'reach'
+      | 'open'
+      | 'trust'
+      | 'favorite'
+      | 'ignore'
+      | 'saveLabel'
+      | 'saveNotes',
+  ) => {
+    if (!selectedDevice || !user) {
+      return;
+    }
+    const busyKey = `${action}:${selectedDevice.id}`;
+    setDeviceDetailBusy(busyKey);
+    try {
+      const result =
+        action === 'reach'
+          ? await checkDeviceReachability(user.id, selectedDevice.id)
+          : action === 'open'
+            ? await openDeviceInterface(user.id, selectedDevice.id, { device: selectedDevice })
+            : action === 'trust'
+              ? await setDeviceTrusted(user.id, selectedDevice.id, !selectedDevice.trusted)
+              : action === 'favorite'
+                ? await setDeviceFavorite(user.id, selectedDevice.id, !selectedDevice.favorite)
+                : action === 'ignore'
+                  ? await setDeviceIgnored(user.id, selectedDevice.id, !selectedDevice.ignored)
+                  : action === 'saveLabel'
+                    ? await updateDeviceLabelAction(user.id, selectedDevice.id, deviceEditor.label)
+                    : await updateDeviceNotesAction(user.id, selectedDevice.id, deviceEditor.notes);
+      applyActionResult(result);
+      await loadNetworkInventory(selectedDevice.id);
+    } catch (error) {
+      setActionResult({
+        actionType:
+          action === 'reach'
+            ? 'ping'
+            : action === 'open'
+              ? 'open_interface'
+              : action === 'saveLabel'
+                ? 'label'
+                : action === 'saveNotes'
+                  ? 'notes'
+                  : action,
+        deviceId: selectedDevice.id,
+        state: 'unavailable',
+        success: false,
+        message: getErrorMessage(error),
+        timestamp: new Date().toISOString(),
+      });
+    } finally {
+      setDeviceDetailBusy(null);
+    }
+  }, [applyActionResult, deviceEditor.label, deviceEditor.notes, loadNetworkInventory, selectedDevice, user]);
+
+  return (
+    <div
+      className="flex h-full min-h-0 flex-col overflow-y-auto bg-[#070707] pb-24 pt-0 custom-scrollbar"
+      style={{ fontFamily: "'Space Grotesk', ui-sans-serif, system-ui, sans-serif" }}
+    >
+      <header className="sticky top-0 z-20 mb-4 flex h-16 items-center justify-between border-b border-cyan-500/20 bg-black/85 px-5 shadow-[0_0_24px_rgba(0,210,255,0.06)] backdrop-blur-xl">
+        <div className="flex min-w-0 items-center gap-3">
+          <Radar className="h-7 w-7 shrink-0 text-lime-400" aria-hidden />
+          <div className="min-w-0">
+            <h1 className="text-lg font-black italic uppercase tracking-[0.18rem] text-cyan-400 drop-shadow-[0_0_10px_rgba(0,210,255,0.65)]">
+              Discovery grid
+            </h1>
+            <p className="text-[9px] font-bold uppercase tracking-[0.2rem] text-zinc-500">Mission control (truthful scope)</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={refreshConn}
+          className="shrink-0 rounded-lg border border-lime-400/30 bg-lime-400/10 px-3 py-2 text-[10px] font-black italic uppercase tracking-[0.14rem] text-lime-400 active:scale-95"
+          title="Refresh browser Network Information + onLine state"
+        >
+          Refresh
+        </button>
+      </header>
+
+      <div className="min-h-0 flex-1 px-4">
+
+      <section className="relative mb-4 overflow-hidden rounded-2xl border border-cyan-500/15 bg-[linear-gradient(180deg,rgba(20,20,20,0.75),rgba(8,8,8,0.95))] p-4">
+        <div className="pointer-events-none absolute inset-0 opacity-[0.05] bg-[linear-gradient(45deg,#101010_25%,transparent_25%),linear-gradient(-45deg,#101010_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#101010_75%),linear-gradient(-45deg,transparent_75%,#101010_75%)] bg-[length:4px_4px]" />
+        <div className="relative mb-3 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black italic uppercase tracking-[0.18rem] text-cyan-400">{discoveryHeroTitle(lastScan)}</p>
+            <p className="text-[10px] font-bold italic text-zinc-500">
+              {discoveryHeroBody(lastScan)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2 py-1 text-[9px] font-black italic uppercase text-cyan-400">
+            Scan: {scanBadge(scanStatus)}
+          </div>
+        </div>
+
+        <div className="relative mx-auto aspect-square w-full max-w-[280px] text-cyan-400/90">
+          <div className="absolute inset-[8%] rounded-full border border-cyan-500/15" />
+          <div className="absolute inset-[20%] rounded-full border border-cyan-500/22" />
+          <div className="absolute inset-[32%] rounded-full border border-lime-400/30" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="absolute w-[86%] h-px bg-gradient-to-r from-transparent via-cyan-400/35 to-transparent" />
+            <div className="absolute h-[86%] w-px bg-gradient-to-b from-transparent via-cyan-400/35 to-transparent" />
+          </div>
+          <div
+            className="absolute inset-[12%] left-1/2 top-1/2 h-[38%] w-[38%] origin-bottom-left animate-[spin_6s_linear_infinite] bg-gradient-to-tr from-transparent via-cyan-400/10 to-cyan-400/26"
+            style={{ clipPath: 'polygon(0 100%, 100% 100%, 100% 0)' }}
+            aria-hidden
+          />
+          <div className="absolute inset-[28%] animate-[spin_6s_linear_infinite] rounded-full border border-dashed border-cyan-500/24" />
+          <div className="pointer-events-none absolute inset-[41%] flex items-center justify-center rounded-full border border-cyan-500/40 bg-black/55 shadow-[0_0_28px_rgba(0,210,255,.18)]">
+            <Wifi className="h-14 w-14 text-cyan-400" />
+          </div>
+          <p className="pointer-events-none absolute bottom-2 left-0 right-0 text-center text-[8px] font-bold uppercase tracking-wider text-zinc-500">
+            {discoveryFooterLabel(lastScan)}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          disabled={scanStatus === 'scanning' || !user}
+          onClick={runScan}
+          title={discoveryButtonTitle(lastScan, Boolean(user))}
+          className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-[10px] font-black italic uppercase tracking-wider ${
+            scanStatus === 'scanning' || !user
+              ? 'cursor-not-allowed border-zinc-700 bg-zinc-900/60 text-zinc-500'
+              : 'border-lime-400/35 bg-lime-400/10 text-lime-300 active:scale-95'
+          }`}
+        >
+          {scanStatus === 'scanning' && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+          {discoveryButtonLabel(lastScan, scanStatus)}
+        </button>
+        <div className="mt-3 rounded-xl border border-zinc-800 bg-black/45 p-3 text-[10px] leading-relaxed text-zinc-400">
+          <p>
+            <span className="font-black uppercase tracking-wider text-zinc-500">Last scan</span>
+            <br />
+            {lastScan ? `${lastScan.status} at ${formatScanTime(lastScan)}` : 'No persisted scan snapshot yet.'}
+          </p>
+          {(scanResult?.summaryText || scanError) && (
+            <p className={scanError ? 'mt-2 text-red-300/90' : 'mt-2 text-cyan-100/90'}>
+              {scanError ?? scanResult?.summaryText}
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="mb-4 grid grid-cols-3 gap-3">
+        <div className="rounded-2xl border border-cyan-500/12 bg-[rgba(22,22,22,0.68)] p-3 backdrop-blur-md">
+          <div className="text-[10px] font-black italic uppercase text-cyan-400">Nodes</div>
+          <div className="text-2xl font-black italic text-zinc-500">{devices.length}</div>
+          <div className="text-[10px] font-bold italic text-zinc-600">Persisted rows</div>
+        </div>
+        <div className="rounded-2xl border border-lime-500/12 bg-[rgba(22,22,22,0.68)] p-3 backdrop-blur-md">
+          <div className="text-[10px] font-black italic uppercase text-lime-400">Tab online</div>
+          <div className="text-2xl font-black italic text-white">{online ? 'Yes' : 'No'}</div>
+          <div className="text-[10px] font-bold italic text-zinc-500">navigator.onLine</div>
+        </div>
+        <div className="rounded-2xl border border-fuchsia-500/12 bg-[rgba(22,22,22,0.68)] p-3 backdrop-blur-md">
+          <div className="text-[10px] font-black italic uppercase text-fuchsia-400">Hints</div>
+          <div className="text-2xl font-black italic text-zinc-400">{conn ? 'API' : '-'}</div>
+          <div className="text-[10px] font-bold italic text-zinc-500">NetInfo</div>
+        </div>
+      </section>
+
+      <section className="mb-4 rounded-2xl border border-orange-400/12 bg-[rgba(22,22,22,0.68)] p-4 backdrop-blur-md">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-black italic uppercase tracking-[0.14rem] text-white">Recent changes</h2>
+            <p className="text-[10px] font-bold italic text-zinc-500">
+              Built from stored scan snapshots and device events only.
+            </p>
+          </div>
+          <span className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-2 py-1 text-[9px] font-black italic uppercase text-orange-200">
+            Review {timeline?.attentionItems.length ?? 0}
+          </span>
+        </div>
+        <p className="mb-3 text-[10px] leading-relaxed text-zinc-500">
+          {timeline?.summaryText ?? 'Sign in and run a truthful scan to build the change timeline.'}
+        </p>
+        {timeline?.items.length ? (
+          <div className="space-y-2">
+            {timeline.items.slice(0, 4).map((item) => (
+              <div key={item.id} className="rounded-xl border border-cyan-500/10 bg-black/45 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-black italic uppercase tracking-[0.08rem] text-cyan-200">
+                    {item.title}
+                  </span>
+                  <span className="shrink-0 text-[8px] font-black uppercase tracking-[0.08rem] text-zinc-600">
+                    {formatEventTime(item.occurredAt)}
+                  </span>
+                </div>
+                <p className="text-[10px] font-bold italic leading-relaxed text-zinc-500">{item.body}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[10px] leading-relaxed text-zinc-600">
+            No timeline rows are available yet. The app will show real scan and device-state events here once they exist.
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-cyan-500/12 bg-[rgba(22,22,22,0.68)] p-4 backdrop-blur-md">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-black italic uppercase tracking-[0.14rem] text-white">Browser network</h2>
+            <p className="text-[10px] font-bold italic text-zinc-500">
+              Same truthful scope as the legacy network overlay. Refreshed: {lastRefresh.toLocaleTimeString()}
+            </p>
+          </div>
+          {online ? (
+            <Wifi className="h-6 w-6 text-green-500" aria-hidden />
+          ) : (
+            <WifiOff className="h-6 w-6 text-red-500" aria-hidden />
+          )}
+        </div>
+        <div className="space-y-2 text-[11px] leading-relaxed text-zinc-300">
+          <p>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Status</span>
+            <br />
+            {online
+              ? 'This tab reports an active network path.'
+              : 'Offline - sync and server-backed features fail until connectivity returns.'}
+          </p>
+          {conn ? (
+            <p>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Network Information API</span>
+              <br />
+              Type: <span className="text-cyan-300">{conn.effectiveType ?? '-'}</span>
+              {typeof conn.downlink === 'number' && (
+                <>
+                  <br />
+                  Est. downlink: <span className="text-cyan-300">{conn.downlink.toFixed(1)} Mbps</span>
+                </>
+              )}
+              {typeof conn.rtt === 'number' && (
+                <>
+                  <br />
+                  RTT hint: <span className="text-cyan-300">{Math.round(conn.rtt)} ms</span>
+                </>
+              )}
+              {conn.saveData === true && (
+                <>
+                  <br />
+                  <span className="text-orange-400">Data-saver hint is on.</span>
+                </>
+              )}
+            </p>
+          ) : (
+            <p className="text-[10px] text-zinc-500">Connection quality hints are not exposed by this browser.</p>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-700 bg-black/50 p-4">
+        <h3 className="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Discovered devices</h3>
+        <p className="text-[10px] leading-relaxed text-zinc-500">
+          {discoveryInventoryBody(lastScan, scanResult, devices.length)}
+        </p>
+        {scanResult?.limitationNotes.length ? (
+          <ul className="mt-3 space-y-1 text-[10px] leading-relaxed text-zinc-500">
+            {scanResult.limitationNotes.slice(0, 3).map((note) => (
+              <li key={note}>- {note}</li>
+            ))}
+          </ul>
+        ) : null}
+        {devices.length > 0 ? (
+          <div className="mt-3 space-y-2">
+            {devices.slice(0, 5).map((device) => {
+              const selected = selectedDeviceId === device.id;
+              return (
+                <div
+                  key={device.id}
+                  className={`w-full rounded-xl border bg-black/45 p-3 text-left transition-colors ${
+                    selected
+                      ? 'border-cyan-400/30 shadow-[inset_0_0_20px_rgba(0,210,255,0.12)]'
+                      : 'border-cyan-500/10 hover:border-cyan-500/20'
+                  }`}
+                >
+                  <div className="mb-2 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[11px] font-black italic uppercase tracking-[0.08rem] text-cyan-200">
+                        {device.label ?? device.hostname ?? device.ipAddress}
+                      </p>
+                      <p className="text-[9px] font-bold text-zinc-600">
+                        {device.ipAddress} | {device.status} | {device.macAddress ? 'MAC known' : 'MAC unavailable'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onSelectDevice?.(device.id)}
+                      className="shrink-0 rounded border border-zinc-700 px-2 py-1 text-[8px] font-black uppercase text-zinc-500"
+                    >
+                      {selected ? 'Selected' : 'Inspect'}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-[repeat(5,minmax(0,1fr))_auto] gap-1.5">
+                    <ActionButton
+                      label="Reach"
+                      busy={actionBusyKey === `reach:${device.id}`}
+                      onClick={() => selectAndRunDeviceAction(device, 'reach')}
+                      title="Browser HTTP probe only; not ICMP ping."
+                    />
+                    <ActionButton
+                      label="Open"
+                      busy={actionBusyKey === `open:${device.id}`}
+                      onClick={() => selectAndRunDeviceAction(device, 'open')}
+                      title="Open candidate HTTP admin/interface URL."
+                    />
+                    <ActionButton
+                      label={device.trusted ? 'Trusted' : 'Trust'}
+                      busy={actionBusyKey === `trust:${device.id}`}
+                      onClick={() => selectAndRunDeviceAction(device, 'trust')}
+                      title="Persist trusted flag."
+                    />
+                    <ActionButton
+                      label={device.favorite ? 'Fav' : 'Star'}
+                      busy={actionBusyKey === `favorite:${device.id}`}
+                      onClick={() => selectAndRunDeviceAction(device, 'favorite')}
+                      title="Persist favorite flag."
+                    />
+                    <ActionButton
+                      label={device.ignored ? 'Ignored' : 'Ignore'}
+                      busy={actionBusyKey === `ignore:${device.id}`}
+                      onClick={() => selectAndRunDeviceAction(device, 'ignore')}
+                      title="Persist ignored flag."
+                    />
+                    <div className="flex items-center justify-center text-cyan-300/70">
+                      <ChevronRight className="h-4 w-4" aria-hidden />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+        {selectedDevice ? (
+          <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-[rgba(12,12,14,0.88)] p-4">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black italic uppercase tracking-[0.16rem] text-cyan-400">
+                  Device operator detail
+                </p>
+                <h4 className="truncate text-sm font-black italic uppercase tracking-[0.08rem] text-white">
+                  {selectedDevice.label ?? selectedDevice.hostname ?? selectedDevice.ipAddress}
+                </h4>
+                <p className="text-[10px] font-bold italic text-zinc-500">
+                  {selectedDeviceContext?.summaryText ?? 'Selected device context from real stored rows only.'}
+                </p>
+              </div>
+              <span className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-2 py-1 text-[9px] font-black uppercase tracking-[0.12rem] text-cyan-300">
+                {selectedDevice.status}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <InfoCard label="IP address" value={selectedDevice.ipAddress} />
+              <InfoCard label="Hostname" value={selectedDevice.hostname ?? 'Unavailable'} />
+              <InfoCard label="First seen" value={formatLongTime(selectedDevice.firstSeenAt)} />
+              <InfoCard label="Last seen" value={formatLongTime(selectedDevice.lastSeenAt)} />
+              <InfoCard label="Candidate interface" value={selectedDeviceBrief?.candidateAdminUrl ?? 'No candidate URL'} />
+              <InfoCard
+                label="Partial data note"
+                value={
+                  selectedDevice.macAddress || selectedDevice.vendor
+                    ? 'Some identity fields are present.'
+                    : 'MAC/vendor data is not currently available for this device.'
+                }
+              />
+            </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <StatePill label="Trusted" active={selectedDevice.trusted} />
+              <StatePill label="Favorite" active={selectedDevice.favorite} />
+              <StatePill label="Ignored" active={selectedDevice.ignored} />
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <ActionButton
+                label="Reachability"
+                busy={deviceDetailBusy === `reach:${selectedDevice.id}`}
+                onClick={() => void runDetailAction('reach')}
+                title="Browser HTTP probe only; not ICMP ping."
+              />
+              <ActionButton
+                label="Open UI"
+                busy={deviceDetailBusy === `open:${selectedDevice.id}`}
+                onClick={() => void runDetailAction('open')}
+                title="Open candidate HTTP(S) URL; admin certainty is not guaranteed."
+              />
+              <ActionButton
+                label={selectedDevice.trusted ? 'Untrust' : 'Trust'}
+                busy={deviceDetailBusy === `trust:${selectedDevice.id}`}
+                onClick={() => void runDetailAction('trust')}
+                title="Persist trusted state."
+              />
+              <ActionButton
+                label={selectedDevice.favorite ? 'Unfavorite' : 'Favorite'}
+                busy={deviceDetailBusy === `favorite:${selectedDevice.id}`}
+                onClick={() => void runDetailAction('favorite')}
+                title="Persist favorite state."
+              />
+              <ActionButton
+                label={selectedDevice.ignored ? 'Unignore' : 'Ignore'}
+                busy={deviceDetailBusy === `ignore:${selectedDevice.id}`}
+                onClick={() => void runDetailAction('ignore')}
+                title="Persist ignore state."
+              />
+              <UnavailableAction label="Wake-on-LAN" reason="Unavailable without a native/server packet sender." />
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3">
+              <label className="rounded-xl border border-cyan-500/10 bg-black/40 p-3">
+                <span className="mb-2 block text-[9px] font-black uppercase tracking-[0.12rem] text-zinc-500">Display label</span>
+                <input
+                  value={deviceEditor.label}
+                  onChange={(event) => setDeviceEditor((prev) => ({ ...prev, label: event.target.value }))}
+                  className="w-full rounded-lg border border-zinc-700 bg-black/60 px-3 py-2 text-[10px] text-white outline-none"
+                  placeholder="Add a truthful label"
+                />
+                <button
+                  type="button"
+                  disabled={deviceDetailBusy === `saveLabel:${selectedDevice.id}`}
+                  onClick={() => void runDetailAction('saveLabel')}
+                  className="mt-2 rounded-lg border border-cyan-500/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.1rem] text-cyan-200"
+                >
+                  {deviceDetailBusy === `saveLabel:${selectedDevice.id}` ? 'Saving...' : 'Save label'}
+                </button>
+              </label>
+              <label className="rounded-xl border border-cyan-500/10 bg-black/40 p-3">
+                <span className="mb-2 block text-[9px] font-black uppercase tracking-[0.12rem] text-zinc-500">Operator notes</span>
+                <textarea
+                  value={deviceEditor.notes}
+                  onChange={(event) => setDeviceEditor((prev) => ({ ...prev, notes: event.target.value }))}
+                  className="min-h-24 w-full rounded-lg border border-zinc-700 bg-black/60 px-3 py-2 text-[10px] text-white outline-none"
+                  placeholder="Record only what you actually know about this device"
+                />
+                <button
+                  type="button"
+                  disabled={deviceDetailBusy === `saveNotes:${selectedDevice.id}`}
+                  onClick={() => void runDetailAction('saveNotes')}
+                  className="mt-2 rounded-lg border border-cyan-500/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.1rem] text-cyan-200"
+                >
+                  {deviceDetailBusy === `saveNotes:${selectedDevice.id}` ? 'Saving...' : 'Save notes'}
+                </button>
+              </label>
+            </div>
+
+            {selectedDeviceBrief ? (
+              <div className="mt-4 rounded-xl border border-orange-400/10 bg-black/40 p-3">
+                <p className="text-[9px] font-black uppercase tracking-[0.12rem] text-orange-300">Assistant context</p>
+                <p className="mt-1 text-[10px] leading-relaxed text-zinc-400">
+                  Ask the assistant: explain this device, what can I do with this device, what changed for this device, or should I trust or ignore this device.
+                </p>
+                {selectedDeviceContext?.limitationNotes.length ? (
+                  <ul className="mt-2 space-y-1 text-[10px] leading-relaxed text-zinc-500">
+                    {selectedDeviceContext.limitationNotes.slice(0, 2).map((note) => (
+                      <li key={note}>- {note}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="mt-4 rounded-xl border border-orange-400/10 bg-black/40 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-[9px] font-black uppercase tracking-[0.12rem] text-orange-300">Recent device history</p>
+                {selectedDeviceBrief?.candidateAdminUrl ? (
+                  <a
+                    href={selectedDeviceBrief.candidateAdminUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.08rem] text-cyan-300"
+                  >
+                    Candidate URL
+                    <ExternalLink className="h-3 w-3" aria-hidden />
+                  </a>
+                ) : null}
+              </div>
+              {selectedDeviceContext?.recentEvents.length ? (
+                <div className="space-y-2">
+                  {selectedDeviceContext.recentEvents.slice(0, 6).map((event) => (
+                    <div key={event.id} className="rounded-lg border border-cyan-500/10 bg-black/45 px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[9px] font-black uppercase tracking-[0.08rem] text-cyan-200">{event.eventType}</span>
+                        <span className="text-[8px] font-black uppercase tracking-[0.08rem] text-zinc-600">
+                          {formatEventTime(event.createdAt)}
+                        </span>
+                      </div>
+                      <p className="text-[10px] leading-relaxed text-zinc-500">{event.message ?? 'Stored device event with no additional message.'}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[10px] leading-relaxed text-zinc-500">
+                  No stored device-specific events yet. This panel only shows real event rows tied to the selected device.
+                </p>
+              )}
+            </div>
+          </div>
+        ) : null}
+        {actionResult ? (
+          <p className={`mt-3 rounded-lg border px-3 py-2 text-[10px] leading-relaxed ${
+            actionResult.success
+              ? 'border-lime-400/20 bg-lime-400/5 text-lime-100/90'
+              : 'border-orange-400/20 bg-orange-400/5 text-orange-100/90'
+          }`}>
+            {actionLabel(actionResult.actionType)} · {actionResult.state} — {actionResult.message}
+          </p>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => onNavigate('assistant')}
+          className="mt-4 w-full rounded-lg border border-cyan-500/25 py-2 text-[10px] font-bold uppercase tracking-wider text-cyan-200 hover:bg-cyan-500/10"
+        >
+          Back to assistant shell
+        </button>
+      </section>
+      </div>
+    </div>
+  );
+}
+
+function ActionButton({
+  label,
+  busy,
+  onClick,
+  title,
+}: {
+  label: string;
+  busy: boolean;
+  onClick: () => void;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onClick}
+      title={title}
+      className="min-h-8 rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-1 text-[8px] font-black uppercase tracking-[0.04rem] text-cyan-100 disabled:cursor-wait disabled:text-zinc-500"
+    >
+      {busy ? '...' : label}
+    </button>
+  );
+}
+
+function InfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-cyan-500/10 bg-black/40 px-3 py-2">
+      <div className="text-[8px] font-black uppercase tracking-[0.12rem] text-zinc-500">{label}</div>
+      <div className="mt-1 break-words text-[10px] font-bold italic leading-relaxed text-cyan-100">{value}</div>
+    </div>
+  );
+}
+
+function StatePill({ label, active }: { label: string; active: boolean }) {
+  return (
+    <div className={`rounded-lg border px-2 py-2 text-center text-[9px] font-black uppercase tracking-[0.08rem] ${
+      active
+        ? 'border-lime-400/20 bg-lime-400/10 text-lime-200'
+        : 'border-zinc-700 bg-black/40 text-zinc-500'
+    }`}>
+      {label}
+    </div>
+  );
+}
+
+function UnavailableAction({ label, reason }: { label: string; reason: string }) {
+  return (
+    <button
+      type="button"
+      disabled
+      title={reason}
+      className="min-h-8 rounded-lg border border-zinc-700 bg-zinc-900/50 px-2 text-[8px] font-black uppercase tracking-[0.04rem] text-zinc-500"
+    >
+      {label}
+    </button>
+  );
+}

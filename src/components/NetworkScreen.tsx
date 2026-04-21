@@ -1,483 +1,179 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { motion } from 'motion/react';
-import { Wifi, Battery, Power, Activity, AlertTriangle, Settings, Radio, X } from 'lucide-react';
+import { Wifi, WifiOff, Radio, X, Satellite, Router, ShieldAlert, Activity } from 'lucide-react';
+
+type NetInfo = {
+  effectiveType?: string;
+  downlink?: number;
+  rtt?: number;
+  saveData?: boolean;
+};
+
+function readNetworkInformation(): NetInfo | null {
+  const c = (navigator as Navigator & { connection?: NetInfo }).connection;
+  if (!c) return null;
+  return {
+    effectiveType: c.effectiveType,
+    downlink: c.downlink,
+    rtt: c.rtt,
+    saveData: c.saveData,
+  };
+}
 
 export function NetworkScreen({ onClose }: { onClose: () => void }) {
-  const [cpuLoad, setCpuLoad] = useState(75);
-  const [cpuTemp, setCpuTemp] = useState(55);
-  const [ramUsed, setRamUsed] = useState(12);
-  const [netDown, setNetDown] = useState(150);
-  const [netUp, setNetUp] = useState(25);
-  const [turboMode, setTurboMode] = useState(false);
-  const [netHistory, setNetHistory] = useState<number[]>(Array(20).fill(25));
-  const [latency, setLatency] = useState(12);
+  const [online, setOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [conn, setConn] = useState<NetInfo | null>(() => readNetworkInformation());
+
+  const refreshConn = useCallback(() => {
+    setConn(readNetworkInformation());
+  }, []);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCpuLoad(prev => Math.max(10, Math.min(100, prev + (Math.random() * 10 - 5))));
-      setCpuTemp(prev => Math.max(30, Math.min(90, prev + (Math.random() * 4 - 2))));
-      setRamUsed(prev => Math.max(4, Math.min(24, prev + (Math.random() * 2 - 1))));
-      
-      const newDown = Math.max(10, Math.min(1000, netDown + (Math.random() * 100 - 50)));
-      setNetDown(newDown);
-      setNetUp(prev => Math.max(5, Math.min(200, prev + (Math.random() * 20 - 10))));
-      setLatency(prev => Math.max(2, Math.min(100, prev + (Math.random() * 4 - 2))));
-      
-      setNetHistory(prev => {
-        const newHistory = [...prev.slice(1), newDown];
-        return newHistory;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [netDown]);
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    const nav = navigator as Navigator & { connection?: EventTarget & NetInfo };
+    const c = nav.connection;
+    const onConn = () => refreshConn();
+    c?.addEventListener?.('change', onConn);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+      c?.removeEventListener?.('change', onConn);
+    };
+  }, [refreshConn]);
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 50 }}
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 50 }}
-      className="absolute inset-0 bg-[#0a0a0a] z-50 flex flex-col items-center p-4 overflow-y-auto custom-scrollbar"
+      exit={{ opacity: 0, y: 24 }}
+      className="absolute inset-0 bg-[#030508] z-50 flex flex-col font-mono overflow-hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Device and network mission control"
     >
-      {/* Background Texture */}
-      <div className="absolute inset-0 opacity-20 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
-      
-      {/* Close Button */}
-      <button 
-        onClick={onClose}
-        className="absolute top-4 right-4 z-50 p-2 bg-black/50 border border-gray-700 rounded-full text-gray-400 hover:text-white hover:border-gray-500 transition-colors"
-      >
-        <X className="w-5 h-5" />
-      </button>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(0,200,255,0.12),transparent_55%),radial-gradient(ellipse_at_10%_90%,rgba(255,140,0,0.08),transparent_45%)]" />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.06] bg-[linear-gradient(90deg,rgba(0,255,200,0.12)_1px,transparent_1px)] bg-[length:22px_100%]" />
 
-      <div className="w-full max-w-2xl flex flex-col items-center gap-6 mt-8 relative z-10 pb-20">
-        <TopBar />
-        <div className="flex w-full gap-6 justify-center items-center">
-          <CenterWidget />
+      <header className="relative z-10 flex items-start justify-between gap-3 px-4 pt-4 pb-3 border-b border-cyan-500/20 bg-black/45">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="mt-0.5 p-2 rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
+            <Satellite className="w-5 h-5" aria-hidden />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[9px] uppercase tracking-[0.28em] text-cyan-300/70">Mission control</p>
+            <h1 className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-100 truncate">
+              Network &amp; device intel
+            </h1>
+            <p className="text-[10px] text-gray-500 mt-2 max-w-[300px] leading-relaxed">
+              Live fields are browser-visible signals only. LAN discovery, router tables, and handset radio scans are
+              not implemented in this client — sections below state that explicitly.
+            </p>
+          </div>
         </div>
-        <div className="flex w-full gap-3 flex-col md:flex-row">
-          <SystemMonitor cpuLoad={cpuLoad} cpuTemp={cpuTemp} ramUsed={ramUsed} />
-          <DetailedMonitor cpuLoad={cpuLoad} cpuTemp={cpuTemp} ramUsed={ramUsed} netDown={netDown} netUp={netUp} turboMode={turboMode} setTurboMode={setTurboMode} netHistory={netHistory} latency={latency} />
-        </div>
-        <RouterControlPanel />
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 p-2 rounded-full border border-white/15 bg-black/50 text-gray-300 hover:text-white hover:border-cyan-400/40 transition-colors"
+          aria-label="Close mission control"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </header>
+
+      <div className="relative z-10 flex-1 overflow-y-auto custom-scrollbar px-4 py-4 space-y-4 pb-10">
+        <section className="rounded-lg border border-cyan-500/25 bg-[linear-gradient(180deg,rgba(10,14,20,0.92),rgba(4,6,10,0.96))] p-4 shadow-[0_0_24px_rgba(0,234,255,0.08)]">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2 text-cyan-300">
+              <Radio className="w-4 h-4" aria-hidden />
+              <span className="text-[10px] font-bold tracking-[0.2em] uppercase">Browser uplink</span>
+            </div>
+            {online ? (
+              <Wifi className="w-6 h-6 text-neon-green drop-shadow-[0_0_8px_#22c55e]" aria-hidden />
+            ) : (
+              <WifiOff className="w-6 h-6 text-red-500 drop-shadow-[0_0_8px_#ef4444]" aria-hidden />
+            )}
+          </div>
+          <div className="text-[11px] text-gray-300 leading-relaxed space-y-2">
+            <p>
+              <span className="text-gray-500 uppercase text-[9px] tracking-wider">Status</span>
+              <br />
+              {online
+                ? 'This tab reports an active network path.'
+                : 'This tab is offline — Supabase sync and protected AI routes will fail until connectivity returns.'}
+            </p>
+            {conn ? (
+              <p>
+                <span className="text-gray-500 uppercase text-[9px] tracking-wider">Network Information API</span>
+                <br />
+                Type: <span className="text-cyan-300">{conn.effectiveType ?? '—'}</span>
+                {typeof conn.downlink === 'number' && (
+                  <>
+                    <br />
+                    Est. downlink: <span className="text-cyan-300">{conn.downlink.toFixed(1)} Mbps</span>
+                  </>
+                )}
+                {typeof conn.rtt === 'number' && (
+                  <>
+                    <br />
+                    RTT hint: <span className="text-cyan-300">{Math.round(conn.rtt)} ms</span>
+                  </>
+                )}
+                {conn.saveData === true && (
+                  <>
+                    <br />
+                    <span className="text-orange-400">Data-saver / save-data hint is on.</span>
+                  </>
+                )}
+              </p>
+            ) : (
+              <p className="text-gray-500 text-[10px]">
+                Connection quality hints are not exposed by this browser (Network Information API unavailable).
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-orange-500/25 bg-black/40 p-4">
+          <div className="flex items-center gap-2 text-orange-300 mb-2">
+            <Activity className="w-4 h-4" aria-hidden />
+            <h2 className="text-[10px] font-bold uppercase tracking-[0.2em]">Local discovery sweep</h2>
+          </div>
+          <p className="text-[10px] text-gray-400 leading-relaxed mb-3">
+            mDNS / ARP / Wi-Fi neighbor lists and active port scans are{' '}
+            <span className="text-orange-200 font-semibold">not available</span> from this web shell without a
+            dedicated native agent and privileged APIs.
+          </p>
+          <div
+            className="rounded border border-dashed border-gray-600 bg-black/50 px-3 py-4 text-center text-[10px] text-gray-500 uppercase tracking-[0.18em]"
+            role="status"
+          >
+            Scan pipeline unavailable in this build
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-white/10 bg-black/35 p-4">
+          <div className="flex items-center gap-2 text-gray-300 mb-2">
+            <Router className="w-4 h-4" aria-hidden />
+            <h2 className="text-[10px] font-bold uppercase tracking-[0.2em]">Router / LAN control</h2>
+          </div>
+          <p className="text-[10px] text-gray-500 leading-relaxed">
+            Router configuration, SSID editing, DHCP reservations, and reboot actions are{' '}
+            <span className="text-gray-300">not implemented</span> for this client and are not available from the browser
+            sandbox. Nothing here performs configuration writes.
+          </p>
+        </section>
+
+        <section className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/5 p-4 flex gap-2">
+          <ShieldAlert className="w-4 h-4 text-fuchsia-300 shrink-0 mt-0.5" aria-hidden />
+          <p className="text-[10px] text-fuchsia-100/90 leading-relaxed">
+            Future network intelligence (asset inventory, flow telemetry, policy hooks) will plug into this surface once
+            backend + device agents exist. Today this screen is intentionally limited to truthful browser signals.
+          </p>
+        </section>
       </div>
     </motion.div>
-  );
-}
-
-function TopBar() {
-  return (
-    <div className="w-full relative bg-[#1a1c23] border-2 border-[#2a2d35] rounded-lg p-2 shadow-2xl">
-      {/* Screws */}
-      <div className="absolute top-1 left-1 w-1.5 h-1.5 rounded-full bg-gray-600 border border-gray-800" />
-      <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-gray-600 border border-gray-800" />
-      <div className="absolute bottom-1 left-1 w-1.5 h-1.5 rounded-full bg-gray-600 border border-gray-800" />
-      <div className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-gray-600 border border-gray-800" />
-
-      <div className="flex justify-between items-center gap-2">
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="flex-1 aspect-[1/1.5] border-2 border-blue-500/50 rounded-md relative flex items-center justify-center shadow-[0_0_10px_rgba(59,130,246,0.2)_inset] bg-black/40">
-            {/* Corner accents */}
-            <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 border-blue-400" />
-            <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 border-blue-400" />
-            
-            {i === 2 && <Wifi className="w-5 h-5 text-green-500 drop-shadow-[0_0_8px_#22c55e]" />}
-            {i === 3 && (
-              <div className="w-8 h-8 rounded-full border-2 border-blue-500 flex items-center justify-center relative">
-                <div className="w-4 h-4 rounded-full border border-blue-400 flex items-center justify-center">
-                  <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_#ef4444]" />
-                </div>
-                {/* Radar sweep */}
-                <motion.div 
-                  className="absolute inset-0 rounded-full border-t-2 border-blue-300"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                />
-              </div>
-            )}
-            {i === 4 && <Battery className="w-5 h-5 text-red-500 drop-shadow-[0_0_8px_#ef4444]" />}
-          </div>
-        ))}
-      </div>
-      
-      <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#1a1c23] border-b-2 border-l-2 border-r-2 border-[#2a2d35] px-4 py-0.5 rounded-b-md text-[8px] font-mono text-gray-400 tracking-widest whitespace-nowrap">
-        NERD LAUNCHER
-      </div>
-    </div>
-  );
-}
-
-function CenterWidget() {
-  return (
-    <div className="relative w-72 h-72 flex items-center justify-center">
-      {/* Outer Casing */}
-      <div className="absolute inset-0 rounded-full bg-[#1a1c23] border-4 border-[#2a2d35] shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-center">
-        {/* Screws and details */}
-        {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => (
-          <div key={deg} className="absolute w-full h-full flex justify-center" style={{ transform: `rotate(${deg}deg)` }}>
-            <div className="w-3 h-3 mt-2 rounded-full bg-gray-700 border-2 border-gray-900 shadow-inner" />
-          </div>
-        ))}
-        
-        {/* Outer Cyan Ring */}
-        <div className="absolute inset-4 rounded-full border-4 border-cyan-400/80 shadow-[0_0_15px_#22d3ee,inset_0_0_15px_#22d3ee]" />
-        
-        {/* Inner Dark Ring with Gears */}
-        <div className="absolute inset-8 rounded-full bg-[#111] border-2 border-gray-700 overflow-hidden flex items-center justify-center">
-           {/* Simulated Gears */}
-           <motion.div 
-             className="absolute w-full h-full opacity-30"
-             animate={{ rotate: 360 }}
-             transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-           >
-             {[...Array(12)].map((_, i) => (
-               <div key={i} className="absolute top-0 left-1/2 w-4 h-full -ml-2" style={{ transform: `rotate(${i * 30}deg)` }}>
-                 <div className="w-full h-4 bg-gray-500 rounded-sm" />
-               </div>
-             ))}
-           </motion.div>
-
-           {/* Inner Cyan Dashed Ring */}
-           <motion.div 
-             className="absolute inset-6 rounded-full border-[6px] border-dashed border-cyan-400/60"
-             animate={{ rotate: -360 }}
-             transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-           />
-
-           {/* Center Core */}
-           <div className="absolute inset-12 rounded-full bg-gradient-to-br from-cyan-900 to-purple-900 border-4 border-cyan-300 shadow-[0_0_20px_#22d3ee] flex flex-col items-center justify-center">
-             <div className="text-6xl font-black italic text-transparent bg-clip-text bg-gradient-to-br from-cyan-300 to-cyan-500 drop-shadow-[0_0_10px_#22d3ee]" style={{ WebkitTextStroke: '1px rgba(255,255,255,0.8)' }}>
-               N
-             </div>
-           </div>
-        </div>
-
-        {/* Bottom Text Panel */}
-        <div className="absolute bottom-6 flex flex-col items-center bg-[#1a1c23]/80 backdrop-blur-sm px-4 py-1 rounded-full border border-cyan-500/30">
-          <div className="text-2xl font-mono font-bold text-cyan-400 drop-shadow-[0_0_8px_#22d3ee]">26</div>
-          <div className="text-[7px] font-mono text-cyan-400 tracking-widest uppercase">System Launcher: Active</div>
-        </div>
-
-        {/* Top Text */}
-        <div className="absolute top-5 text-[10px] font-mono font-bold text-gray-300 tracking-widest bg-[#1a1c23]/80 px-3 py-0.5 rounded-full">
-          NERD LAUNCHER
-        </div>
-
-        {/* Side Icons */}
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border border-green-500/50 flex items-center justify-center bg-black/80 shadow-[0_0_10px_rgba(34,197,94,0.2)]">
-          <Settings className="w-4 h-4 text-green-500" />
-        </div>
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border border-yellow-500/50 flex items-center justify-center bg-black/80 shadow-[0_0_10px_rgba(234,179,8,0.2)]">
-          <span className="text-[10px] font-bold text-yellow-500">AI</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SystemMonitor({ cpuLoad, cpuTemp, ramUsed }: any) {
-  const cpuRadius = 28;
-  const cpuCircumference = 2 * Math.PI * cpuRadius;
-  const cpuOffset = cpuCircumference - (cpuLoad / 100) * cpuCircumference;
-
-  const ramRadius = 28;
-  const ramCircumference = 2 * Math.PI * ramRadius;
-  const ramOffset = ramCircumference - ((ramUsed / 24) * ramCircumference);
-
-  return (
-    <div className="flex-1 bg-[#1a1c23] border border-[#2a2d35] rounded-lg p-3 relative shadow-xl flex flex-col min-w-[180px]">
-      <div className="text-center mb-3">
-        <div className="text-[10px] font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-purple-500">NERD LAUNCHER</div>
-        <div className="text-[8px] font-mono text-cyan-400 tracking-widest">SYSTEM MONITOR</div>
-      </div>
-
-      {/* Venn Diagram Gauges */}
-      <div className="relative h-24 flex items-center justify-center mb-4">
-        {/* CPU Circle */}
-        <div className="absolute left-2 w-[72px] h-[72px] rounded-full border-2 border-cyan-400/20 flex flex-col items-center justify-center bg-[#111]/90 backdrop-blur-md z-10 shadow-[0_0_15px_rgba(34,211,238,0.15)]">
-          <svg className="absolute inset-0 w-full h-full -rotate-90">
-            <circle cx="36" cy="36" r={cpuRadius} fill="none" stroke="#22d3ee" strokeWidth="3" strokeDasharray={cpuCircumference} strokeDashoffset={cpuOffset} className="transition-all duration-1000" />
-          </svg>
-          <span className="text-[7px] text-gray-400 font-mono mt-1">CPU</span>
-          <span className="text-sm font-bold text-white leading-none">{Math.round(cpuLoad)}%</span>
-          <span className="text-[5px] text-cyan-400 font-mono mt-1">{Math.round(cpuTemp)}°C / 3.8 GHz</span>
-        </div>
-
-        {/* RAM Circle */}
-        <div className="absolute right-2 w-[72px] h-[72px] rounded-full border-2 border-red-500/20 flex flex-col items-center justify-center bg-[#111]/90 backdrop-blur-md z-0 shadow-[0_0_15px_rgba(239,68,68,0.15)]">
-          <svg className="absolute inset-0 w-full h-full -rotate-90">
-            <circle cx="36" cy="36" r={ramRadius} fill="none" stroke="#ef4444" strokeWidth="3" strokeDasharray={ramCircumference} strokeDashoffset={ramOffset} className="transition-all duration-1000" />
-          </svg>
-          <span className="text-[7px] text-gray-400 font-mono mt-1">RAM</span>
-          <span className="text-sm font-bold text-white leading-none">{Math.round((ramUsed/24)*100)}%</span>
-          <span className="text-[5px] text-orange-400 font-mono mt-1">{ramUsed.toFixed(1)} GB / 24 GB</span>
-        </div>
-      </div>
-
-      {/* Bottom Controls */}
-      <div className="flex justify-between items-end mt-auto">
-        <div className="flex gap-1.5">
-          <div className="w-7 h-9 bg-black border border-cyan-500/50 rounded flex flex-col items-center justify-center shadow-[0_0_5px_rgba(34,211,238,0.2)]">
-            <Power className="w-3 h-3 text-cyan-400" />
-            <span className="text-[5px] text-cyan-400 mt-1 font-mono">PWR</span>
-          </div>
-          <div className="w-7 h-9 bg-black border border-purple-500/50 rounded flex flex-col items-center justify-center shadow-[0_0_5px_rgba(168,85,247,0.2)]">
-            <Activity className="w-3 h-3 text-purple-400" />
-            <span className="text-[5px] text-purple-400 mt-1 font-mono">NET</span>
-          </div>
-          <div className="w-7 h-9 bg-black border border-yellow-500/50 rounded flex flex-col items-center justify-center shadow-[0_0_5px_rgba(234,179,8,0.2)]">
-            <AlertTriangle className="w-3 h-3 text-yellow-400" />
-            <span className="text-[5px] text-yellow-400 mt-1 font-mono">TEMP</span>
-          </div>
-        </div>
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 border-2 border-gray-600 shadow-[0_2px_5px_rgba(0,0,0,0.5)] relative flex items-center justify-center">
-           <div className="w-6 h-6 rounded-full bg-gray-800 border border-gray-700" />
-          <div className="absolute top-1.5 left-1/2 -translate-x-1/2 w-1 h-2 bg-orange-500 rounded-full shadow-[0_0_5px_#f97316]" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DetailedMonitor({ cpuLoad, cpuTemp, ramUsed, netDown, netUp, turboMode, setTurboMode, netHistory, latency }: any) {
-  const cpuRadius = 14;
-  const cpuCircumference = 2 * Math.PI * cpuRadius;
-  const cpuOffset = cpuCircumference - (cpuLoad / 100) * cpuCircumference;
-
-  // Generate SVG polyline points from history
-  const maxNet = Math.max(...netHistory, 100);
-  const points = netHistory.map((val: number, i: number) => {
-    const x = (i / (netHistory.length - 1)) * 100;
-    const y = 30 - ((val / maxNet) * 30);
-    return `${x},${y}`;
-  }).join(' ');
-
-  return (
-    <div className="flex-1 bg-[#1a1c23] border border-[#2a2d35] rounded-lg p-3 relative shadow-xl flex flex-col font-mono min-w-[180px]">
-      <div className="text-center mb-3">
-        <div className="text-[8px] text-gray-300 tracking-widest border-b border-gray-700 pb-1 inline-block px-4">NERD LAUNCHER</div>
-      </div>
-
-      {/* CPU Section */}
-      <div className="mb-3">
-        <div className="text-[6px] text-gray-400 mb-1">CPU</div>
-        <div className="flex items-center gap-2">
-          <div className="flex flex-col items-center">
-            <span className="text-[4px] text-blue-400 whitespace-nowrap">TURBO MODE</span>
-            <button onClick={() => setTurboMode(!turboMode)} className={`w-6 h-3 rounded-full mt-0.5 relative transition-colors ${turboMode ? 'bg-blue-500' : 'bg-gray-700'}`}>
-              <div className={`absolute top-0.5 w-2 h-2 rounded-full bg-white transition-all ${turboMode ? 'left-3.5' : 'left-0.5'}`} />
-            </button>
-          </div>
-          <div className="w-9 h-9 rounded-full border-2 border-blue-400/30 flex flex-col items-center justify-center relative bg-black/50">
-            <svg className="absolute inset-0 w-full h-full -rotate-90">
-              <circle cx="16" cy="16" r={cpuRadius} fill="none" stroke="#60a5fa" strokeWidth="2" strokeDasharray={cpuCircumference} strokeDashoffset={cpuOffset} className="transition-all duration-1000" />
-            </svg>
-            <span className="text-[4px] text-white">TEMP: {Math.round(cpuTemp)}°C</span>
-            <span className="text-[4px] text-white">LOAD: {Math.round(cpuLoad)}%</span>
-          </div>
-          <div className="flex-1 h-3 bg-black border border-pink-500/50 rounded flex overflow-hidden p-0.5 gap-0.5">
-            {[...Array(10)].map((_, i) => (
-              <div key={i} className={`flex-1 rounded-sm ${i < (cpuLoad / 10) ? 'bg-pink-500 shadow-[0_0_5px_#ec4899]' : 'bg-gray-800'}`} />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* RAM Section */}
-      <div className="mb-3 border-t border-gray-800 pt-2">
-        <div className="flex justify-between text-[6px] text-gray-400 mb-1">
-          <span>RAM</span>
-          <span>RAM</span>
-        </div>
-        <div className="flex items-end gap-2 h-10">
-          <div className="flex flex-col gap-[1px] h-full justify-end">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className={`w-3 h-1 rounded-sm ${i >= 8 - (ramUsed / 3) ? 'bg-orange-500 shadow-[0_0_3px_#f97316]' : 'bg-gray-800'}`} />
-            ))}
-            <span className="text-[4px] text-orange-500 mt-1 text-center leading-tight">USED<br/>{ramUsed.toFixed(0)}GB</span>
-          </div>
-          <div className="flex flex-col gap-[1px] h-full justify-end">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className={`w-3 h-1 rounded-sm ${i >= 8 - ((24 - ramUsed) / 3) ? 'bg-orange-500 shadow-[0_0_3px_#f97316]' : 'bg-gray-800'}`} />
-            ))}
-            <span className="text-[4px] text-orange-500 mt-1 text-center leading-tight">FREE<br/>{(24 - ramUsed).toFixed(0)}GB</span>
-          </div>
-          
-          <div className="flex-1 ml-2 flex flex-col justify-end h-full pb-1">
-            <div className="text-[4px] text-orange-500 text-center mb-1">ALLOCATION</div>
-            <div className="w-full h-3 bg-black border border-orange-500/50 rounded flex overflow-hidden p-0.5 gap-0.5">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className={`flex-1 rounded-sm ${i < (ramUsed / 4) ? 'bg-orange-500 shadow-[0_0_5px_#f97316]' : 'bg-gray-800'}`} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* NETWORK Section */}
-      <div className="border-t border-gray-800 pt-2 mt-auto">
-        <div className="text-[6px] text-gray-400 mb-1 flex justify-between">
-          <span>NETWORK</span>
-          <span>PING: {Math.round(latency)}ms</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-full border border-green-500/50 flex flex-col items-center justify-center relative bg-black/50">
-            <Radio className="w-3 h-3 text-green-500 mb-0.5" />
-            <span className="text-[3px] text-green-500">DOWN: {Math.round(netDown)}</span>
-            <span className="text-[3px] text-green-500">UP: {Math.round(netUp)}</span>
-            <motion.div className="absolute inset-0 rounded-full border border-green-400" animate={{ scale: [1, 1.2, 1], opacity: [1, 0, 1] }} transition={{ duration: 2, repeat: Infinity }} />
-          </div>
-          <div className="flex-1 h-7 bg-black/50 border border-green-500/30 rounded relative overflow-hidden">
-            {/* Dynamic line graph */}
-            <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 30">
-              <polyline points={points} fill="none" stroke="#22c55e" strokeWidth="1" className="drop-shadow-[0_0_2px_#22c55e] transition-all duration-300" />
-            </svg>
-          </div>
-          <div className="w-6 h-6 border border-green-500/50 rounded flex flex-col items-center justify-center bg-green-500/10 shadow-[0_0_5px_rgba(34,197,94,0.2)]">
-            <div className="w-1.5 h-1.5 bg-green-500 shadow-[0_0_5px_#22c55e]" />
-            <span className="text-[3px] text-green-500 mt-0.5">VRACTIVE</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RouterControlPanel() {
-  const [ssid, setSsid] = useState('NERD_NET_5G');
-  const [password, setPassword] = useState('********');
-  const [security, setSecurity] = useState('WPA3-Personal');
-  const [channel, setChannel] = useState('Auto');
-  const [isRebooting, setIsRebooting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'status' | 'wireless' | 'devices'>('status');
-
-  const devices = [
-    { id: '1', name: 'Nerd-PC', ip: '192.168.1.10', mac: '00:1A:2B:3C:4D:5E', type: 'Desktop', status: 'Active' },
-    { id: '2', name: 'Neural-Link', ip: '192.168.1.15', mac: 'A1:B2:C3:D4:E5:F6', type: 'IoT', status: 'Active' },
-    { id: '3', name: 'Mobile-Comm', ip: '192.168.1.20', mac: '11:22:33:44:55:66', type: 'Mobile', status: 'Idle' },
-  ];
-
-  const handleReboot = () => {
-    setIsRebooting(true);
-    setTimeout(() => setIsRebooting(false), 5000);
-  };
-
-  return (
-    <div className="w-full bg-[#1a1c23] border border-[#2a2d35] rounded-lg p-4 shadow-xl font-mono">
-      <div className="flex justify-between items-center mb-4 border-b border-gray-800 pb-2">
-        <div className="flex items-center gap-2">
-          <Settings className="w-4 h-4 text-cyan-400" />
-          <h3 className="text-xs font-bold text-cyan-400 tracking-widest">ROUTER CONTROL</h3>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setActiveTab('status')} className={`text-[10px] px-2 py-1 rounded ${activeTab === 'status' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50' : 'text-gray-500 hover:text-gray-300'}`}>STATUS</button>
-          <button onClick={() => setActiveTab('wireless')} className={`text-[10px] px-2 py-1 rounded ${activeTab === 'wireless' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50' : 'text-gray-500 hover:text-gray-300'}`}>WIRELESS</button>
-          <button onClick={() => setActiveTab('devices')} className={`text-[10px] px-2 py-1 rounded ${activeTab === 'devices' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50' : 'text-gray-500 hover:text-gray-300'}`}>DEVICES</button>
-        </div>
-      </div>
-
-      <div className="min-h-[150px]">
-        {activeTab === 'status' && (
-          <div className="grid grid-cols-2 gap-4 text-[10px]">
-            <div className="space-y-2">
-              <div className="flex justify-between border-b border-gray-800 pb-1">
-                <span className="text-gray-500">WAN IP</span>
-                <span className="text-green-400">203.0.113.42</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-800 pb-1">
-                <span className="text-gray-500">LAN IP</span>
-                <span className="text-gray-300">192.168.1.1</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-800 pb-1">
-                <span className="text-gray-500">MAC Address</span>
-                <span className="text-gray-300">00:14:22:01:23:45</span>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between border-b border-gray-800 pb-1">
-                <span className="text-gray-500">Uptime</span>
-                <span className="text-gray-300">42 Days, 13:37:00</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-800 pb-1">
-                <span className="text-gray-500">Firmware</span>
-                <span className="text-gray-300">v2.4.1-NERD</span>
-              </div>
-              <div className="flex justify-between items-center pt-2">
-                <button 
-                  onClick={handleReboot}
-                  disabled={isRebooting}
-                  className={`px-3 py-1 rounded text-[10px] border transition-colors ${isRebooting ? 'bg-red-500/20 border-red-500 text-red-500 animate-pulse' : 'bg-red-500/10 border-red-500/50 text-red-400 hover:bg-red-500/30'}`}
-                >
-                  {isRebooting ? 'REBOOTING...' : 'REBOOT ROUTER'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'wireless' && (
-          <div className="grid grid-cols-2 gap-4 text-[10px]">
-            <div className="space-y-3">
-              <div>
-                <label className="block text-gray-500 mb-1">SSID (Network Name)</label>
-                <input type="text" value={ssid} onChange={(e) => setSsid(e.target.value)} className="w-full bg-black border border-gray-700 rounded px-2 py-1 text-cyan-400 focus:outline-none focus:border-cyan-500" />
-              </div>
-              <div>
-                <label className="block text-gray-500 mb-1">Password</label>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-black border border-gray-700 rounded px-2 py-1 text-cyan-400 focus:outline-none focus:border-cyan-500" />
-              </div>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-gray-500 mb-1">Security Mode</label>
-                <select value={security} onChange={(e) => setSecurity(e.target.value)} className="w-full bg-black border border-gray-700 rounded px-2 py-1 text-cyan-400 focus:outline-none focus:border-cyan-500">
-                  <option>WPA3-Personal</option>
-                  <option>WPA2/WPA3-Mixed</option>
-                  <option>WPA2-Personal</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-gray-500 mb-1">Channel</label>
-                <select value={channel} onChange={(e) => setChannel(e.target.value)} className="w-full bg-black border border-gray-700 rounded px-2 py-1 text-cyan-400 focus:outline-none focus:border-cyan-500">
-                  <option>Auto</option>
-                  <option>36</option>
-                  <option>40</option>
-                  <option>44</option>
-                  <option>48</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'devices' && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-[10px] text-left">
-              <thead>
-                <tr className="text-gray-500 border-b border-gray-800">
-                  <th className="pb-1 font-normal">Device Name</th>
-                  <th className="pb-1 font-normal">IP Address</th>
-                  <th className="pb-1 font-normal">MAC Address</th>
-                  <th className="pb-1 font-normal">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {devices.map(device => (
-                  <tr key={device.id} className="border-b border-gray-800/50">
-                    <td className="py-1.5 text-cyan-400">{device.name}</td>
-                    <td className="py-1.5 text-gray-300">{device.ip}</td>
-                    <td className="py-1.5 text-gray-500">{device.mac}</td>
-                    <td className="py-1.5">
-                      <span className={`px-1.5 py-0.5 rounded text-[8px] ${device.status === 'Active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-800 text-gray-400'}`}>
-                        {device.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
   );
 }

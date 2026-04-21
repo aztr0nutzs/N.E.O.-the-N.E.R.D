@@ -1,69 +1,49 @@
 # AGENTS.md
 
-This repository is undergoing a **backend migration from Firebase to Supabase**.
+## Current branch reality (authoritative)
+
+- **Backend:** Supabase (Auth with Google, Postgres `tasks` / `messages`, RLS).
+- **Server:** Protected routes verify **Supabase JWTs** in `server.ts` (fail closed).
+- **Client auth / API helpers:** `src/authClient.ts` (Supabase session, OAuth, `fetchProtectedJson`, shared error helpers).
+- **Android:** Capacitor is the active native shell (`android/`).
+- **UI:** `Robot2D` is the live center robot. **`Robot3D` is parked** and must not be re-enabled during backend work.
+- The visible HUD layout, frame geometry, hotspots, panel placement, and overall visual hierarchy are **frozen** unless a task explicitly says otherwise.
 
 ## Mission
-Finish one working backend. Do not maintain parallel Firebase and Supabase logic longer than required for the migration cutover.
 
-## Current branch assumptions
-- `Robot2D` is the live center robot component.
-- `Robot3D` is on hold and must not be re-enabled during backend migration.
-- The visible HUD layout, frame geometry, hotspots, panel placement, and overall visual hierarchy are frozen unless a task explicitly says otherwise.
+Maintain **one** working backend (Supabase). Prefer small, verifiable edits. Keep auth, data, and server token verification changes isolated by file. Preserve existing user-facing copy where possible.
 
 ## Non-negotiable UI preservation rules
+
 1. Do not redesign the UI.
 2. Do not move major panels.
 3. Do not change the center composition.
-4. Do not replace the Robot2D concept.
+4. Do not replace the `Robot2D` concept.
 5. Do not flatten the interface into generic cards.
 6. Do not remove glow, frame, panel, HUD, or scanline treatments unless a bug fix explicitly requires it.
 
-## Migration principles
-1. Remove Firebase **only after** Supabase replacement code is in place.
-2. Prefer small, verifiable edits.
-3. Keep auth, data, and server token verification changes isolated by file.
-4. Preserve existing user-facing copy where possible.
-5. Fail closed on server auth.
-6. Use Row Level Security in Supabase for all user-owned data.
+## Engineering principles
 
-## Agent skills (Cursor)
+1. Prefer small, verifiable edits.
+2. Keep auth, data, and server token verification changes isolated by file.
+3. Preserve existing user-facing copy where possible.
+4. Fail closed on server auth.
+5. Use Row Level Security in Supabase for all user-owned data.
 
-Project skills live under **`.cursor/skills/<skill-name>/SKILL.md`**. Cursor loads them automatically when this folder is present in the workspace (rescan: restart Cursor or reload the window if a new skill does not appear).
+## Key runtime files
 
-**In the UI:** **Settings** → **Rules** → **Agent Decides** (or the skills list shown with project rules) lists discovered skills.
+- `server.ts` — Express, Supabase JWT verification, `/api/ai/*`.
+- `src/lib/supabase.ts` — browser Supabase client.
+- `src/authClient.ts` — sign-in/out, session token for protected fetches, mobile OAuth deep link handling.
+- `src/context/NeuralContext.tsx` — auth state and neural runtime wiring.
+- `src/components/TaskLog.tsx`, `src/components/ChatInterface.tsx` — tasks/messages UI backed by Supabase.
 
-**In chat:** type **`/<skill-name>`** (e.g. `/neo-verify-gates`) or **`@`** and pick the skill to attach it.
+## Historical / cleanup-only references
 
-| Skill | Path | Use when |
-|------|------|----------|
-| `neo-supabase-migration-pass` | `.cursor/skills/neo-supabase-migration-pass/SKILL.md` | Firebase → Supabase migration slices (`firebase.ts`, Firestore paths, NeuralContext, TaskLog, ChatInterface, `src/lib/supabase.ts`, etc.). |
-| `neo-verify-gates` | `.cursor/skills/neo-verify-gates/SKILL.md` | After substantive changes: `npm ci` / `npm run lint` / `npm run build` and manual auth/data/AI checklist. |
-| `neo-ui-preservation` | `.cursor/skills/neo-ui-preservation/SKILL.md` | TaskLog, ChatInterface, App.tsx, or styling that could break the HUD / Robot2D visual contract. |
-| `neo-server-hardening` | `.cursor/skills/neo-server-hardening/SKILL.md` | `server.ts`: JWT auth, rate limits, Gemini allowlists, body limits, fail-closed env behavior. |
-
-## Authoritative migration targets
-- Auth provider: Supabase Auth with Google sign-in
-- Data store: Supabase Postgres tables `tasks` and `messages`
-- Server auth verification: Supabase JWT verification using JWKS or auth client verification strategy
-- Protected AI routes remain server-side
-
-## Files expected to change
-- `package.json`
-- `.env.example`
-- `server.ts`
-- `src/firebase.ts` -> replace with Supabase-aware auth/api helper module
-- `src/firestore.ts` -> remove/replace with Supabase client module
-- `src/context/NeuralContext.tsx`
-- `src/components/TaskLog.tsx`
-- `src/components/ChatInterface.tsx`
-
-## Files expected to be removed after cutover
-- `firebase-applet-config.json`
-- `firebase-blueprint.json`
-- `firestore.rules`
-- any stale Firebase imports/usages
+Legacy Firebase config filenames (`firebase-applet-config.json`, `firebase-blueprint.json`, `firestore.rules`) may still appear in **migration prompts or old docs** as removal targets; they are not part of the active Supabase runtime. See `docs/LEGACY_FIREBASE_DEPENDENCY_SNAPSHOT.md` for a frozen pre-migration snapshot.
 
 ## Required verification gates after each task
+
 - `npm ci`
 - `npm run lint`
 - `npm run build`
