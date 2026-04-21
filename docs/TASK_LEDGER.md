@@ -308,3 +308,8 @@ Verify and polish the selected-device/operator workflow so mission-control and a
 
 ### Remaining manual limitation
 - full live operator workflow still remains auth-gated in this environment and needs signed-in runtime verification
+
+## Workflow note — Post-merge follow-up branches
+- After a PR merges, start the next task from `main` on a new `cursor/...` branch.
+- Do not continue user-facing follow-up work on a branch whose PR is already merged.
+- If follow-up commits land on a merged branch by mistake, cut a fresh branch from `main`, cherry-pick the commits, and open a new PR for them.
