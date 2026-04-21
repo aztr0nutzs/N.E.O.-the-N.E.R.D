@@ -4,6 +4,9 @@ import {
   Activity,
   Brain,
   Cpu,
+  ExternalLink,
+  Flag,
+  History,
   MessageSquare,
   Mic,
   MicOff,
@@ -31,6 +34,7 @@ export interface AssistantCommandCenterScreenProps {
   onOpenDiagnostics: () => void;
   onOpenSensors: () => void;
   onOpenTerminal: () => void;
+  selectedDeviceId?: string | null;
 }
 
 type UiMode = 'text' | 'voice' | 'agent';
@@ -66,6 +70,7 @@ export function AssistantCommandCenterScreen({
   onOpenDiagnostics,
   onOpenSensors,
   onOpenTerminal,
+  selectedDeviceId = null,
 }: AssistantCommandCenterScreenProps) {
   const { user } = useNeuralAuth();
   const { isSystemsReady, isListening, lastTranscript, toggleListening } = useNeuralSystem();
@@ -117,13 +122,13 @@ export function AssistantCommandCenterScreen({
     setNetworkIntelLoading(true);
     setNetworkIntelError(null);
     try {
-      setNetworkIntel(await fetchAssistantNetworkIntel(user.id));
+      setNetworkIntel(await fetchAssistantNetworkIntel(user.id, { selectedDeviceId: selectedDeviceId ?? undefined }));
     } catch (error) {
       setNetworkIntelError(getErrorMessage(error));
     } finally {
       setNetworkIntelLoading(false);
     }
-  }, [user]);
+  }, [selectedDeviceId, user]);
 
   useEffect(() => {
     void loadNetworkIntel();
@@ -145,6 +150,14 @@ export function AssistantCommandCenterScreen({
       { c: 'text-cyan-400' as const, t, msg: `Last voice: ${lastTranscript || '—'}` },
     ];
   }, [readoutTick, user?.email, online, isSystemsReady, motionPct, lastTranscript]);
+
+  const selectedDeviceContext = networkIntel?.selectedDevice ?? null;
+  const selectedDeviceBrief = selectedDeviceContext?.device ?? null;
+
+  const selectedDeviceHistory = useMemo(
+    () => selectedDeviceContext?.recentEvents ?? [],
+    [selectedDeviceContext],
+  );
 
   return (
     <motion.div
@@ -435,6 +448,88 @@ export function AssistantCommandCenterScreen({
           )}
         </section>
 
+        <section className="mb-4 rounded-2xl border border-[rgba(114,220,255,0.12)] bg-[rgba(12,12,14,0.85)] p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-black italic uppercase tracking-[0.14rem] text-white">Selected device</h2>
+              <p className="text-[10px] font-bold italic text-zinc-500">
+                Device-specific operator context from the current mission selection.
+              </p>
+            </div>
+            <span className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[9px] font-black italic uppercase tracking-[0.12rem] text-cyan-300">
+              {selectedDeviceBrief ? 'linked' : 'none'}
+            </span>
+          </div>
+          {selectedDeviceBrief ? (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-cyan-500/10 bg-black/40 px-3 py-3">
+                <div className="text-[11px] font-black italic uppercase tracking-[0.1rem] text-cyan-300">
+                  {selectedDeviceBrief.title}
+                </div>
+                <div className="mt-1 text-[10px] font-bold italic leading-relaxed text-zinc-500">
+                  IP {selectedDeviceBrief.ipAddress} · status {selectedDeviceBrief.status} · trusted {selectedDeviceBrief.trusted ? 'yes' : 'no'} · ignored {selectedDeviceBrief.ignored ? 'yes' : 'no'}
+                </div>
+                <div className="mt-2 text-[10px] leading-relaxed text-zinc-400">
+                  {selectedDeviceBrief.hostname
+                    ? `Hostname is currently ${selectedDeviceBrief.hostname}.`
+                    : 'Hostname is currently unavailable from the stored record.'}
+                  {' '}
+                  {selectedDeviceBrief.notes
+                    ? `Operator notes: ${selectedDeviceBrief.notes}`
+                    : 'No operator notes are stored yet.'}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <SelectedDeviceCard
+                  icon={<History className="h-4 w-4 text-orange-300" />}
+                  title="What changed?"
+                  body={
+                    selectedDeviceHistory.length > 0
+                      ? selectedDeviceHistory.map((item) => `${item.title}: ${item.body}`).join(' ')
+                      : 'No recent stored events are linked to this device yet.'
+                  }
+                />
+                <SelectedDeviceCard
+                  icon={<Flag className="h-4 w-4 text-lime-300" />}
+                  title="What can I do?"
+                  body={selectedDeviceBrief.availableActions
+                    .slice(0, 4)
+                    .map((action) => `${action.label} (${action.state})`)
+                    .join(', ')}
+                />
+              </div>
+
+              <div className="space-y-2">
+                {selectedDeviceBrief.availableActions.slice(0, 5).map((action) => (
+                  <div key={`${selectedDeviceBrief.id}:${action.actionType}`} className="rounded-xl border border-zinc-800 bg-black/35 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-black italic uppercase tracking-[0.1rem] text-cyan-200">
+                        {action.label}
+                      </span>
+                      <span className="text-[8px] font-black uppercase tracking-[0.1rem] text-zinc-500">
+                        {action.state}
+                      </span>
+                    </div>
+                    <div className="text-[10px] leading-relaxed text-zinc-500">{action.reason}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-xl border border-orange-500/15 bg-orange-500/5 px-3 py-2 text-[10px] leading-relaxed text-orange-100/80">
+                {selectedDeviceBrief.candidateAdminUrl
+                  ? `Candidate interface available: ${selectedDeviceBrief.candidateAdminUrl}. This is only a candidate URL; admin certainty is not claimed.`
+                  : 'No candidate interface URL is currently available for this device.'}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[10px] font-bold italic leading-relaxed text-zinc-500">
+              Select a device from the discovery mission to ask grounded questions like what changed for this device,
+              what actions are available, or whether it should be trusted or ignored.
+            </p>
+          )}
+        </section>
+
         <section className="relative mb-4 rounded-2xl border border-cyan-500/25 bg-black/45 p-4">
           <div className="absolute inset-0 pointer-events-none opacity-30 bg-[conic-gradient(from_180deg_at_50%_50%,rgba(0,234,255,0.15),transparent_40%,rgba(255,96,0,0.12),transparent_70%)]" />
           <p className="relative text-[9px] uppercase tracking-[0.22em] text-gray-500 mb-4">Local field (honest)</p>
@@ -664,6 +759,26 @@ function UnavailableRow({ title, body }: { title: string; body: string }) {
       <span className="rounded-full border border-zinc-700 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-zinc-500">
         N/A
       </span>
+    </div>
+  );
+}
+
+function SelectedDeviceCard({
+  icon,
+  title,
+  body,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="rounded-xl border border-cyan-500/10 bg-black/40 px-3 py-3">
+      <div className="mb-2 flex items-center gap-2">
+        {icon}
+        <div className="text-[10px] font-black italic uppercase tracking-[0.1rem] text-cyan-200">{title}</div>
+      </div>
+      <div className="text-[10px] leading-relaxed text-zinc-500">{body}</div>
     </div>
   );
 }
