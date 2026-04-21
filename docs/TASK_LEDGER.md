@@ -260,3 +260,25 @@ Harden native discovery observation consumption, timeline/event behavior, and as
 - timeline reflects real scan/device changes more accurately
 - assistant summaries stay truthful
 - mission-control screen reflects observations cleanly
+
+## Task — Device Detail / Operator Workflow
+Date: 2026-04-19
+Owner Agent: Codex
+Branch: cursor/native-android-discovery-4136
+
+### Files changed
+- src/components/AssistantCommandCenterScreen.tsx
+- src/components/mission/MissionShell.tsx
+- src/components/mission/NerdDeviceDiscoveryMission.tsx
+- src/lib/network/assistantIntelligence.ts
+
+### Goal
+Make per-device network data operationally usable through a truthful device-detail/operator workflow.
+
+### Expected outcomes
+- selected device detail flow improved
+- per-device actions exposed more clearly
+- assistant can consume selected-device context
+- mission-control workflow is more usable
+- no fake device certainty introduced
+- shell aesthetic preserved
