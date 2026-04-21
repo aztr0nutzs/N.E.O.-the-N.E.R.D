@@ -9,10 +9,6 @@ if (!capacitorSettings.exists()) {
 apply from: capacitorSettings
 
 include ':app'
-<<<<<<< HEAD
-include ':capacitor-cordova-android-plugins'
-project(':capacitor-cordova-android-plugins').projectDir = file('capacitor-cordova-android-plugins')
-=======
 
 def capacitorCordovaPluginsDir = new File(rootDir, 'capacitor-cordova-android-plugins')
 gradle.ext.hasCapacitorCordovaAndroidPlugins = capacitorCordovaPluginsDir.exists()
@@ -21,8 +17,6 @@ if (gradle.ext.hasCapacitorCordovaAndroidPlugins) {
     include ':capacitor-cordova-android-plugins'
     project(':capacitor-cordova-android-plugins').projectDir = capacitorCordovaPluginsDir
 }
-
-apply from: 'capacitor.settings.gradle'
 
 // Capacitor regenerates capacitor.settings.gradle with `new File('../node_modules/...')`, which is
 // resolved against the JVM working directory, not the android/ folder. Some IDE and tooling
@@ -50,4 +44,3 @@ capacitorSettingsFile.eachLine('UTF-8') { String line ->
         }
     }
 }
->>>>>>> 0982b97a74a6a76d8b0a1d5fe82ded5784c6c8b2
