@@ -52,8 +52,8 @@ export interface NetworkScanResult {
   discoveryProviderKind: RawDiscoveryResult['discoveryProviderKind'];
 }
 
-const SCAN_SCOPE = 'browser-safe-network-visibility';
-const ENGINE_VERSION = 'browser-safe-mvp-1';
+const SCAN_SCOPE = 'network-discovery-visibility';
+const ENGINE_VERSION = 'network-discovery-mvp-1';
 
 function readNetworkInformation(): NetworkInformationSnapshot | null {
   if (typeof navigator === 'undefined') return null;
@@ -73,6 +73,85 @@ function getErrorMessage(error: unknown): string {
 
 function isHttpOrigin(origin: string): boolean {
   return origin.startsWith('http://') || origin.startsWith('https://');
+}
+
+function trimOrNull(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function observationIdentityKey(observation: DeviceObservationInput): string {
+  const macAddress = trimOrNull(observation.macAddress);
+  if (macAddress) {
+    return `mac:${macAddress.toLowerCase()}`;
+  }
+  return `ip:${observation.ipAddress}`;
+}
+
+function observationQualityScore(observation: DeviceObservationInput): number {
+  let score = 0;
+  if (trimOrNull(observation.macAddress)) score += 4;
+  if (trimOrNull(observation.hostname)) score += 2;
+  if (trimOrNull(observation.vendor)) score += 1;
+  if (observation.deviceType) score += 1;
+  if (observation.status) score += 1;
+  if (observation.observedAt) score += 1;
+  return score;
+}
+
+function mergeObservationMetadata(
+  left?: Record<string, unknown>,
+  right?: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  if (!left && !right) return undefined;
+  return {
+    ...(left ?? {}),
+    ...(right ?? {}),
+  };
+}
+
+function preferObservation(
+  current: DeviceObservationInput,
+  candidate: DeviceObservationInput,
+): DeviceObservationInput {
+  const currentScore = observationQualityScore(current);
+  const candidateScore = observationQualityScore(candidate);
+
+  if (candidateScore > currentScore) {
+    return {
+      ...candidate,
+      metadata: mergeObservationMetadata(current.metadata, candidate.metadata),
+    };
+  }
+
+  if (candidateScore === currentScore && (candidate.observedAt ?? '') > (current.observedAt ?? '')) {
+    return {
+      ...candidate,
+      metadata: mergeObservationMetadata(current.metadata, candidate.metadata),
+    };
+  }
+
+  return {
+    ...current,
+    metadata: mergeObservationMetadata(current.metadata, candidate.metadata),
+  };
+}
+
+function dedupeObservations(batch: readonly DeviceObservationInput[]): DeviceObservationInput[] {
+  const deduped = new Map<string, DeviceObservationInput>();
+  for (const observation of batch) {
+    const key = observationIdentityKey(observation);
+    const existing = deduped.get(key);
+    deduped.set(key, existing ? preferObservation(existing, observation) : observation);
+  }
+  return [...deduped.values()];
+}
+
+function limitedScanMessage(raw: RawDiscoveryResult): string {
+  return raw.scanPath === 'native_android'
+    ? 'Scan limited by current native Android discovery-path constraints.'
+    : 'Scan limited by browser/WebView platform constraints.';
 }
 
 export function evaluatePlatformCapabilities(): PlatformCapabilities {
@@ -181,13 +260,21 @@ function buildSummary(raw: RawDiscoveryResult, discoveredCount: number, knownCou
   ].join(' ');
 }
 
-function buildMetrics(raw: RawDiscoveryResult, discoveredCount: number, knownCount: number) {
+function buildMetrics(
+  raw: RawDiscoveryResult,
+  rawObservationCount: number,
+  ingestedObservationCount: number,
+  discoveredCount: number,
+  knownCount: number,
+) {
   const discoveryAvailability = evaluateDiscoveryAvailability();
   return {
     engineVersion: ENGINE_VERSION,
     scope: SCAN_SCOPE,
     capability: raw.capability,
     probes: raw.probes,
+    rawObservationCount,
+    ingestedObservationCount,
     observedDeviceCount: discoveredCount,
     knownDeviceCount: knownCount,
     limitationNotes: raw.limitationNotes,
@@ -254,9 +341,11 @@ class ScanCoordinator {
       );
 
       const raw = await runDiscovery(capability);
+      const ingestedObservations = dedupeObservations(raw.observations);
       const discoveredDevices: DeviceRecord[] = [];
+      const emittedDeviceIds = new Set<string>();
 
-      for (const observation of raw.observations) {
+      for (const observation of ingestedObservations) {
         const enriched: DeviceObservationInput = {
           ...observation,
           metadata: {
@@ -266,6 +355,10 @@ class ScanCoordinator {
           },
         };
         const { device, isNew } = await upsertDeviceFromObservation(userId, enriched);
+        if (emittedDeviceIds.has(device.id)) {
+          continue;
+        }
+        emittedDeviceIds.add(device.id);
         discoveredDevices.push(device);
         events.push(
           await createDeviceEvent(userId, {
@@ -282,7 +375,13 @@ class ScanCoordinator {
       const summaryText = buildSummary(raw, discoveredDevices.length, knownDevices.length);
       const finalStatus: ScanStatus = raw.limitationNotes.length > 0 ? 'limited' : 'completed';
       const finishedAt = new Date().toISOString();
-      const metrics = buildMetrics(raw, discoveredDevices.length, knownDevices.length);
+      const metrics = buildMetrics(
+        raw,
+        raw.observations.length,
+        ingestedObservations.length,
+        discoveredDevices.length,
+        knownDevices.length,
+      );
 
       const finalizedScan = await finalizeScanSnapshot(userId, scan.id, {
         status: finalStatus,
@@ -297,8 +396,13 @@ class ScanCoordinator {
           await createDeviceEvent(userId, {
             scanId: finalizedScan.id,
             eventType: 'scan_limited',
-            message: 'Scan limited by browser/WebView platform constraints.',
-            metadata: { limitationNotes: raw.limitationNotes, capability },
+            message: limitedScanMessage(raw),
+            metadata: {
+              limitationNotes: raw.limitationNotes,
+              capability,
+              scanPath: raw.scanPath,
+              discoveryProviderKind: raw.discoveryProviderKind,
+            },
           }),
         );
       }

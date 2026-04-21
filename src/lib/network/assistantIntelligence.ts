@@ -214,16 +214,33 @@ function buildChangeSummaryText(timeline: NetworkTimelineSummary, summary: Netwo
   return `Recent changes: ${attentionText}${topItems.join(' | ')}`;
 }
 
+function lastScanPath(lastScan: ScanSnapshot | null): 'browser_safe' | 'native_android' | null {
+  const scanPath = lastScan?.metrics?.scanPath;
+  return scanPath === 'native_android' || scanPath === 'browser_safe' ? scanPath : null;
+}
+
 function buildLimitations(capabilities: PlatformCapabilities, lastScan: ScanSnapshot | null): string[] {
   const notes = new Set<string>(capabilities.limitationNotes);
-  notes.add('No ICMP ping or raw TCP port scanning is available from the browser/WebView path.');
+  const scanPath = lastScanPath(lastScan);
+
+  notes.add(
+    scanPath === 'native_android'
+      ? 'The native Android path uses bounded reachability probing and still does not provide ICMP ping or raw TCP port scanning.'
+      : 'No ICMP ping or raw TCP port scanning is available from the browser/WebView path.',
+  );
   notes.add('Wake-on-LAN requires future native or server-side packet sending support.');
 
   if (lastScan?.status === 'limited') {
-    notes.add('The last scan was explicitly limited by platform constraints.');
+    notes.add(
+      scanPath === 'native_android'
+        ? 'The last scan was explicitly limited by native Android discovery-path constraints.'
+        : 'The last scan was explicitly limited by browser/WebView platform constraints.',
+    );
   }
   if (!capabilities.canEnumerateLanDevices) {
     notes.add('Broad LAN discovery is not available in the current web client.');
+  } else if (scanPath === 'native_android') {
+    notes.add('The current Android-native path can observe reachable hosts within a bounded probe window, not guaranteed full LAN coverage.');
   }
   if (!capabilities.canReadMacAddresses) {
     notes.add('MAC/vendor inference is unavailable unless a real scanner supplies those fields.');
@@ -238,6 +255,7 @@ function buildRecommendations(
   lastScan: ScanSnapshot | null,
   limitations: readonly string[],
   timeline: NetworkTimelineSummary,
+  capabilities: PlatformCapabilities,
 ): AssistantRecommendation[] {
   const recommendations: AssistantRecommendation[] = [];
 
@@ -258,7 +276,9 @@ function buildRecommendations(
       id: 'run-first-scan',
       priority: 'high',
       title: 'Run a truthful scan',
-      body: 'No scan snapshot exists yet. Run the browser-safe scan to persist the current capability-limited baseline.',
+      body: capabilities.canEnumerateLanDevices
+        ? 'No scan snapshot exists yet. Run the current truthful scan to persist a real bounded native baseline.'
+        : 'No scan snapshot exists yet. Run the browser-safe scan to persist the current capability-limited baseline.',
       actionType: 'scan',
     });
   } else if (lastScan.status === 'limited') {
@@ -266,7 +286,9 @@ function buildRecommendations(
       id: 'review-limited-scan',
       priority: 'normal',
       title: 'Review limited scan constraints',
-      body: 'The most recent scan completed with limited visibility. Treat device counts as persisted inventory, not full LAN coverage.',
+      body: lastScanPath(lastScan) === 'native_android'
+        ? 'The most recent scan used the native Android bounded-probe path. Treat device counts as reachable-host observations, not guaranteed full LAN coverage.'
+        : 'The most recent scan completed with limited browser/WebView visibility. Treat device counts as persisted inventory, not full LAN coverage.',
       actionType: 'review_limits',
     });
   }
@@ -346,7 +368,7 @@ export async function fetchAssistantNetworkIntel(userId: string): Promise<Assist
   const recentEvents = timeline.recentEvents;
   const capabilities = evaluatePlatformCapabilities();
   const limitationNotes = buildLimitations(capabilities, lastScan);
-  const recommendations = buildRecommendations(summary, devices, lastScan, limitationNotes, timeline);
+  const recommendations = buildRecommendations(summary, devices, lastScan, limitationNotes, timeline, capabilities);
 
   return {
     generatedAt: new Date().toISOString(),
