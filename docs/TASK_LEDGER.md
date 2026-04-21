@@ -238,3 +238,25 @@ Branch: cursor/native-discovery-foundation-b642
 - No full-subnet sweep
 - No guaranteed full LAN enumeration
 - Android Gradle assemble still requires local SDK environment to verify
+
+## Task — Native Discovery Verification / Consumption Hardening
+Date: 2026-04-19
+Owner Agent: Codex
+Branch: cursor/native-android-discovery-4136
+
+### Files changed
+- src/lib/network/scanService.ts
+- src/lib/network/changeTimeline.ts
+- src/lib/network/assistantIntelligence.ts
+- src/components/AssistantCommandCenterScreen.tsx
+- src/components/mission/NerdDeviceDiscoveryMission.tsx
+
+### Goal
+Harden native discovery observation consumption, timeline/event behavior, and assistant/UI summaries without changing shell layout.
+
+### Expected outcomes
+- native-backed observations consumed cleanly
+- duplicate/noisy event behavior reduced
+- timeline reflects real scan/device changes more accurately
+- assistant summaries stay truthful
+- mission-control screen reflects observations cleanly
