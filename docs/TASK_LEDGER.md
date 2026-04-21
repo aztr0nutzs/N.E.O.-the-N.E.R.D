@@ -208,3 +208,33 @@ Branch: task/history-alerts-timeline
 - No malicious/suspicious-device inference
 - No offline/online claims without explicit events
 - No fabricated action/device history
+
+## Task — Native Android Discovery Plugin
+Date: 2026-04-19
+Owner Agent: Codex
+Branch: cursor/native-discovery-foundation-b642
+
+### Files changed
+- android/app/src/main/java/com/ai/assistant/NeoNetworkScannerPlugin.java
+- android/app/src/main/java/com/ai/assistant/MainActivity.java
+- android/app/src/main/AndroidManifest.xml
+- src/lib/network/discovery/neoNetworkScannerPlugin.ts
+- src/lib/network/discovery/nativeAndroidDiscovery.ts
+- src/lib/network/scanService.ts
+
+### Verified outcomes
+- App-local NeoNetworkScanner Capacitor plugin added
+- Native Android provider no longer stub-only
+- Real bounded host reachability observations can flow into the canonical normalization/persistence pipeline
+- Browser-safe fallback path remains intact
+- Capability truthfulness tightened
+- npm ci passed
+- npm run lint passed
+- npm run build passed
+- npx cap sync android passed
+
+### Honest limitations
+- No MAC/vendor/ARP/router inventory visibility
+- No full-subnet sweep
+- No guaranteed full LAN enumeration
+- Android Gradle assemble still requires local SDK environment to verify
