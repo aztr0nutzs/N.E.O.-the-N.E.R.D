@@ -73,6 +73,7 @@ export function MissionShell({
   onOpenTerminal,
 }: MissionShellProps) {
   const [tab, setTab] = useState<MissionTab>(initialTab);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
 
   useEffect(() => {
     setTab(initialTab);
@@ -125,6 +126,7 @@ export function MissionShell({
             {tab === 'assistant' && (
               <AssistantCommandCenterScreen
                 embedded
+                selectedDeviceId={selectedDeviceId}
                 onClose={onClose}
                 onExpandChat={() => {
                   onClose();
@@ -138,7 +140,13 @@ export function MissionShell({
                 onOpenTerminal={() => closeThen(onOpenTerminal)}
               />
             )}
-            {tab === 'discovery' && <NerdDeviceDiscoveryMission onNavigate={select} />}
+            {tab === 'discovery' && (
+              <NerdDeviceDiscoveryMission
+                selectedDeviceId={selectedDeviceId}
+                onSelectDevice={setSelectedDeviceId}
+                onNavigate={select}
+              />
+            )}
             {tab === 'settings' && <SettingsMatrixScreen embedded onClose={onClose} />}
           </Suspense>
         </div>

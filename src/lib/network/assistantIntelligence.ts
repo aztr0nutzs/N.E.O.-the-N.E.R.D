@@ -1,5 +1,6 @@
 import { listDevices } from './devicesRepository';
 import { fetchNetworkTimeline } from './changeTimeline';
+import { listEventsForDevice } from './eventsRepository';
 import { fetchNetworkSummary } from './networkSummary';
 import { getLastScanSnapshot } from './scansRepository';
 import type { PlatformCapabilities } from './scanTypes';
@@ -49,6 +50,15 @@ export interface AssistantRecommendation {
   deviceId?: string;
 }
 
+export interface AssistantSelectedDeviceContext {
+  device: AssistantDeviceBrief;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  recentEvents: DeviceEvent[];
+  limitationNotes: string[];
+  summaryText: string;
+}
+
 export interface AssistantNetworkIntel {
   generatedAt: string;
   summary: NetworkSummary;
@@ -63,6 +73,12 @@ export interface AssistantNetworkIntel {
   changeSummaryText: string;
   limitationNotes: string[];
   recommendations: AssistantRecommendation[];
+  selectedDevice: AssistantSelectedDeviceContext | null;
+}
+
+export interface FetchAssistantNetworkIntelOptions {
+  selectedDeviceId?: string;
+  selectedEventLimit?: number;
 }
 
 function formatTime(value: string | null | undefined): string {
@@ -214,6 +230,12 @@ function buildChangeSummaryText(timeline: NetworkTimelineSummary, summary: Netwo
   return `Recent changes: ${attentionText}${topItems.join(' | ')}`;
 }
 
+function metadataObject(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
 function lastScanPath(lastScan: ScanSnapshot | null): 'browser_safe' | 'native_android' | null {
   const scanPath = lastScan?.metrics?.scanPath;
   return scanPath === 'native_android' || scanPath === 'browser_safe' ? scanPath : null;
@@ -247,6 +269,63 @@ function buildLimitations(capabilities: PlatformCapabilities, lastScan: ScanSnap
   }
 
   return Array.from(notes);
+}
+
+function selectedDeviceLimitations(device: DeviceRecord): string[] {
+  const notes = new Set<string>();
+  const fieldProvenance = metadataObject(device.metadata.fieldProvenance);
+  const statusProvenance = typeof fieldProvenance?.status === 'string' ? fieldProvenance.status : null;
+
+  if (!device.hostname) {
+    notes.add('Hostname is not currently reported for this device.');
+  }
+  if (!device.macAddress || !device.vendor) {
+    notes.add('MAC/vendor identity is partial or unavailable for this device.');
+  }
+  if (candidateAdminUrl(device)) {
+    notes.add('Candidate interface URL is not verified to be an admin panel.');
+  }
+  if (device.status === 'unknown') {
+    notes.add('Online state is currently unknown for this device.');
+  } else if (statusProvenance === 'inferred') {
+    notes.add('Online state is inferred from a bounded observation, not guaranteed continuous presence.');
+  }
+
+  return Array.from(notes);
+}
+
+function buildSelectedDeviceSummary(
+  device: DeviceRecord,
+  recentEvents: readonly DeviceEvent[],
+  limitationNotes: readonly string[],
+): string {
+  const title = titleForDevice(device);
+  const latestEvent = recentEvents[0];
+  const eventText = latestEvent
+    ? `${latestEvent.message ?? latestEvent.eventType} at ${formatTime(latestEvent.createdAt)}.`
+    : 'No related device events are stored yet.';
+
+  return [
+    `${title} is recorded at ${device.ipAddress} with status ${device.status}.`,
+    `First seen ${formatTime(device.firstSeenAt)}; last seen ${formatTime(device.lastSeenAt)}.`,
+    eventText,
+    limitationNotes[0] ?? '',
+  ].filter(Boolean).join(' ');
+}
+
+function buildSelectedDeviceContext(
+  device: DeviceRecord,
+  recentEvents: readonly DeviceEvent[],
+): AssistantSelectedDeviceContext {
+  const limitationNotes = selectedDeviceLimitations(device);
+  return {
+    device: buildDeviceBrief(device),
+    firstSeenAt: device.firstSeenAt,
+    lastSeenAt: device.lastSeenAt,
+    recentEvents: [...recentEvents],
+    limitationNotes,
+    summaryText: buildSelectedDeviceSummary(device, recentEvents, limitationNotes),
+  };
 }
 
 function buildRecommendations(
@@ -354,7 +433,10 @@ function buildRecommendations(
   return recommendations.slice(0, MAX_RECOMMENDATIONS);
 }
 
-export async function fetchAssistantNetworkIntel(userId: string): Promise<AssistantNetworkIntel> {
+export async function fetchAssistantNetworkIntel(
+  userId: string,
+  options: FetchAssistantNetworkIntelOptions = {},
+): Promise<AssistantNetworkIntel> {
   if (!userId) {
     throw new Error('assistant network intelligence requires an authenticated user id');
   }
@@ -369,6 +451,12 @@ export async function fetchAssistantNetworkIntel(userId: string): Promise<Assist
   const capabilities = evaluatePlatformCapabilities();
   const limitationNotes = buildLimitations(capabilities, lastScan);
   const recommendations = buildRecommendations(summary, devices, lastScan, limitationNotes, timeline, capabilities);
+  const selectedDeviceRecord = options.selectedDeviceId
+    ? devices.find((device) => device.id === options.selectedDeviceId) ?? null
+    : null;
+  const selectedDeviceEvents = selectedDeviceRecord
+    ? await listEventsForDevice(userId, selectedDeviceRecord.id, options.selectedEventLimit ?? 8)
+    : [];
 
   return {
     generatedAt: new Date().toISOString(),
@@ -387,6 +475,9 @@ export async function fetchAssistantNetworkIntel(userId: string): Promise<Assist
     changeSummaryText: buildChangeSummaryText(timeline, summary),
     limitationNotes,
     recommendations,
+    selectedDevice: selectedDeviceRecord
+      ? buildSelectedDeviceContext(selectedDeviceRecord, selectedDeviceEvents)
+      : null,
   };
 }
 
