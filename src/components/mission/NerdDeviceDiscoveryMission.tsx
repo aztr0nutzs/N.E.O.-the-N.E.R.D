@@ -54,6 +54,67 @@ function formatEventTime(value: string): string {
   return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
+function lastScanMetrics(scan: ScanSnapshot | null): Record<string, unknown> | null {
+  return scan?.metrics && typeof scan.metrics === 'object' && !Array.isArray(scan.metrics)
+    ? scan.metrics as Record<string, unknown>
+    : null;
+}
+
+function lastScanPath(scan: ScanSnapshot | null): 'browser_safe' | 'native_android' | null {
+  const metrics = lastScanMetrics(scan);
+  const path = metrics?.scanPath;
+  return path === 'native_android' || path === 'browser_safe' ? path : null;
+}
+
+function discoveryHeroTitle(scan: ScanSnapshot | null): string {
+  return lastScanPath(scan) === 'native_android' ? 'Native Android-backed signals' : 'Browser-visible signals';
+}
+
+function discoveryHeroBody(scan: ScanSnapshot | null): string {
+  return lastScanPath(scan) === 'native_android'
+    ? 'Scan engine can consume bounded native Android reachability observations plus truthful limitation notes.'
+    : 'Scan engine is browser-safe: it records real link/probe signals and never fabricates LAN hosts.';
+}
+
+function discoveryFooterLabel(scan: ScanSnapshot | null): string {
+  return lastScanPath(scan) === 'native_android'
+    ? 'Native Android bounded reachability'
+    : 'Browser-safe sweep - limited visibility';
+}
+
+function discoveryButtonLabel(scan: ScanSnapshot | null, scanStatus: ScanCoordinatorStatus): string {
+  if (scanStatus === 'scanning') {
+    return lastScanPath(scan) === 'native_android' ? 'Scanning native scope' : 'Scanning browser scope';
+  }
+  return 'Run truthful scan';
+}
+
+function discoveryButtonTitle(scan: ScanSnapshot | null, hasUser: boolean): string {
+  if (!hasUser) {
+    return 'Sign in required before scan snapshots can be persisted.';
+  }
+  return lastScanPath(scan) === 'native_android'
+    ? 'Run scan: persists snapshot, native observations when available, and limitation notes.'
+    : 'Run browser-safe scan: persists snapshot, real probes, and limitation notes.';
+}
+
+function discoveryInventoryBody(
+  scan: ScanSnapshot | null,
+  scanResult: NetworkScanResult | null,
+  devicesCount: number,
+): string {
+  const path = scanResult?.scanPath ?? lastScanPath(scan);
+  if (devicesCount > 0) {
+    return path === 'native_android'
+      ? `${devicesCount} Supabase-backed device row(s) exist. Native Android scans can refresh reachable hosts without claiming full LAN coverage. Current scan observed ${scanResult?.discoveredDevices.length ?? 0} device(s).`
+      : `${devicesCount} Supabase-backed device row(s) exist. This browser-safe scan does not mark them online unless a real scanner observes them. Current scan observed ${scanResult?.discoveredDevices.length ?? 0} device(s).`;
+  }
+
+  return path === 'native_android'
+    ? 'No host inventory rows exist yet. Native Android scans can persist bounded reachable-host observations, but they still do not guarantee full LAN enumeration.'
+    : 'No host inventory rows exist yet. This browser-safe scan can persist snapshots and limitations, but it cannot invent LAN devices without a native or server-side scanner.';
+}
+
 function scanBadge(status: ScanCoordinatorStatus): string {
   if (status === 'idle') return 'ready';
   if (status === 'scanning') return 'scanning';
@@ -251,9 +312,9 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
         <div className="pointer-events-none absolute inset-0 opacity-[0.05] bg-[linear-gradient(45deg,#101010_25%,transparent_25%),linear-gradient(-45deg,#101010_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#101010_75%),linear-gradient(-45deg,transparent_75%,#101010_75%)] bg-[length:4px_4px]" />
         <div className="relative mb-3 flex items-start justify-between gap-3">
           <div>
-            <p className="text-[10px] font-black italic uppercase tracking-[0.18rem] text-cyan-400">Browser-visible signals</p>
+            <p className="text-[10px] font-black italic uppercase tracking-[0.18rem] text-cyan-400">{discoveryHeroTitle(lastScan)}</p>
             <p className="text-[10px] font-bold italic text-zinc-500">
-              Scan engine is browser-safe: it records real link/probe signals and never fabricates LAN hosts.
+              {discoveryHeroBody(lastScan)}
             </p>
           </div>
           <div className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2 py-1 text-[9px] font-black italic uppercase text-cyan-400">
@@ -279,7 +340,7 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
             <Wifi className="h-14 w-14 text-cyan-400" />
           </div>
           <p className="pointer-events-none absolute bottom-2 left-0 right-0 text-center text-[8px] font-bold uppercase tracking-wider text-zinc-500">
-            Browser-safe sweep - limited visibility
+            {discoveryFooterLabel(lastScan)}
           </p>
         </div>
 
@@ -287,11 +348,7 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
           type="button"
           disabled={scanStatus === 'scanning' || !user}
           onClick={runScan}
-          title={
-            user
-              ? 'Run browser-safe scan: persists snapshot, real probes, and limitation notes.'
-              : 'Sign in required before scan snapshots can be persisted.'
-          }
+          title={discoveryButtonTitle(lastScan, Boolean(user))}
           className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-[10px] font-black italic uppercase tracking-wider ${
             scanStatus === 'scanning' || !user
               ? 'cursor-not-allowed border-zinc-700 bg-zinc-900/60 text-zinc-500'
@@ -299,7 +356,7 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
           }`}
         >
           {scanStatus === 'scanning' && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
-          {scanStatus === 'scanning' ? 'Scanning browser scope' : 'Run truthful scan'}
+          {discoveryButtonLabel(lastScan, scanStatus)}
         </button>
         <div className="mt-3 rounded-xl border border-zinc-800 bg-black/45 p-3 text-[10px] leading-relaxed text-zinc-400">
           <p>
@@ -425,17 +482,9 @@ export function NerdDeviceDiscoveryMission({ onNavigate }: Props) {
 
       <section className="rounded-2xl border border-zinc-700 bg-black/50 p-4">
         <h3 className="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Discovered devices</h3>
-        {devices.length > 0 ? (
-          <p className="text-[10px] leading-relaxed text-zinc-500">
-            {devices.length} Supabase-backed device row(s) exist. This browser-safe scan does not mark them online unless
-            a real scanner observes them. Current scan observed {scanResult?.discoveredDevices.length ?? 0} device(s).
-          </p>
-        ) : (
-          <p className="text-[10px] leading-relaxed text-zinc-500">
-            No host inventory rows exist yet. This browser-safe scan can persist snapshots and limitations, but it cannot
-            invent LAN devices without a native or server-side scanner.
-          </p>
-        )}
+        <p className="text-[10px] leading-relaxed text-zinc-500">
+          {discoveryInventoryBody(lastScan, scanResult, devices.length)}
+        </p>
         {scanResult?.limitationNotes.length ? (
           <ul className="mt-3 space-y-1 text-[10px] leading-relaxed text-zinc-500">
             {scanResult.limitationNotes.slice(0, 3).map((note) => (

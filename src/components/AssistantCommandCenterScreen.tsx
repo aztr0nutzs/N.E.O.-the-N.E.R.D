@@ -45,6 +45,13 @@ function formatTimelineTime(value: string): string {
   return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
+function lastScanPathLabel(networkIntel: AssistantNetworkIntel | null): string {
+  const scanPath = networkIntel?.lastScan?.metrics?.scanPath;
+  if (scanPath === 'native_android') return 'Native Android bounded reachability';
+  if (scanPath === 'browser_safe') return 'Browser-safe limited visibility';
+  return 'No stored scan path yet';
+}
+
 /**
  * Assistant command center — visual fidelity from nerd_assistant_command_center.html.
  * Controls are wired to real destinations or explicitly marked unavailable / decorative.
@@ -341,7 +348,7 @@ export function AssistantCommandCenterScreen({
                 LAN / device graph: <span className="text-zinc-400">stored rows</span> only — not full LAN coverage.
               </p>
               <p className="text-[9px] font-bold italic leading-relaxed text-zinc-500">
-                Last scan: <span className="text-zinc-400">{networkIntel?.lastScan?.status ?? 'none'}</span> — browser-safe scope.
+                Last scan: <span className="text-zinc-400">{networkIntel?.lastScan?.status ?? 'none'}</span> — {lastScanPathLabel(networkIntel)}.
               </p>
             </div>
             <p className="mt-2 text-[10px] font-bold italic text-zinc-500">
@@ -502,7 +509,7 @@ export function AssistantCommandCenterScreen({
             <ModuleButton
               icon={<Radar className="h-5 w-5 text-fuchsia-400" />}
               title="Discovery intel"
-              subtitle="Browser-visible network scope."
+              subtitle="Stored scan and device intelligence."
               accent="fuchsia"
               onClick={onOpenNetwork}
             />

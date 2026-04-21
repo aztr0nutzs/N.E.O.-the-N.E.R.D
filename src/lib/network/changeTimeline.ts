@@ -102,6 +102,22 @@ function metadataBoolean(metadata: Record<string, unknown>, key: string): boolea
   return typeof value === 'boolean' ? value : null;
 }
 
+function metadataString(metadata: Record<string, unknown>, key: string): string | null {
+  const value = metadata[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function scanPathFromMetadata(metadata: Record<string, unknown>): 'browser_safe' | 'native_android' | null {
+  const scanPath = metadataString(metadata, 'scanPath');
+  return scanPath === 'native_android' || scanPath === 'browser_safe' ? scanPath : null;
+}
+
+function describeScanConstraint(scanPath: 'browser_safe' | 'native_android' | null): string {
+  return scanPath === 'native_android'
+    ? 'current native Android discovery-path constraints'
+    : 'browser/WebView platform constraints';
+}
+
 function stateChangeBody(
   event: DeviceEvent,
   deviceName: string,
@@ -221,11 +237,12 @@ function bodyForEvent(
       return event.message ?? `${deviceName} was newly observed by a real scan source.`;
     case 'device_seen_again':
       return event.message ?? `${deviceName} was observed again by a real scan source.`;
-    case 'scan_limited':
-      return event.message ?? 'Scan visibility was limited by browser/WebView platform constraints.';
+    case 'scan_limited': {
+      const scanPath = scanPathFromMetadata(event.metadata);
+      return event.message ?? `Scan visibility was limited by ${describeScanConstraint(scanPath)}.`;
+    }
     case 'scan_no_devices':
-      return event.message
-        ?? 'The scan stored zero observed devices. Under browser/WebView limits, this does not prove the LAN is empty.';
+      return event.message ?? 'The scan stored zero observed devices. This does not prove the LAN is empty under current discovery-path constraints.';
     case 'device_trust_changed':
       return stateChangeBody(event, deviceName, 'trusted', 'marked trusted', 'removed from trusted');
     case 'device_favorite_changed':
@@ -290,11 +307,12 @@ function titleForScanStatus(status: ScanStatus, category: NetworkAlertCategory):
 
 function bodyForScan(scan: ScanSnapshot, category: NetworkAlertCategory): string {
   if (scan.summary) return scan.summary;
+  const scanPath = scanPathFromMetadata(scan.metrics);
   if (category === 'scan_no_devices') {
-    return 'The scan snapshot stored zero observations. This does not prove the LAN is empty under browser/WebView limits.';
+    return 'The scan snapshot stored zero observations. This does not prove the LAN is empty under current discovery-path constraints.';
   }
   if (category === 'scan_limited') {
-    return 'The scan snapshot was finalized as limited by current platform constraints.';
+    return `The scan snapshot was finalized as limited by ${describeScanConstraint(scanPath)}.`;
   }
   return `Scan snapshot status: ${scan.status}; observed device count: ${scan.deviceCount}.`;
 }
@@ -322,6 +340,21 @@ function sortTimelineItems(items: NetworkTimelineItem[]): NetworkTimelineItem[] 
     const left = new Date(a.occurredAt).getTime();
     const right = new Date(b.occurredAt).getTime();
     return (Number.isNaN(right) ? 0 : right) - (Number.isNaN(left) ? 0 : left);
+  });
+}
+
+function suppressScanLevelDuplicateEvents(
+  items: readonly NetworkTimelineItem[],
+  recentScans: readonly ScanSnapshot[],
+): NetworkTimelineItem[] {
+  const scanIds = new Set(recentScans.map((scan) => scan.id));
+  return items.filter((item) => {
+    if (item.sourceType !== 'device_event') return true;
+    if (!item.scanId || !scanIds.has(item.scanId)) return true;
+    if (item.category === 'scan_completed' || item.category === 'scan_limited' || item.category === 'scan_started') {
+      return false;
+    }
+    return true;
   });
 }
 
@@ -364,10 +397,11 @@ export async function fetchNetworkTimeline(
   ]);
 
   const deviceLookup = new Map(devices.map((device) => [device.id, device]));
-  const items = sortTimelineItems([
+  const mergedItems = [
     ...recentScans.map(itemFromScan),
     ...recentEvents.map((event) => itemFromEvent(event, deviceLookup)),
-  ]).slice(0, limit);
+  ];
+  const items = sortTimelineItems(suppressScanLevelDuplicateEvents(mergedItems, recentScans)).slice(0, limit);
   const attentionItems = items.filter((item) => item.attention === 'attention');
 
   return {
