@@ -282,3 +282,29 @@ Make per-device network data operationally usable through a truthful device-deta
 - mission-control workflow is more usable
 - no fake device certainty introduced
 - shell aesthetic preserved
+
+## Task — Device Operator Workflow Verification / Polish
+Date: 2026-04-19
+Owner Agent: Codex
+Branch: cursor/native-android-discovery-4136
+
+### Files changed
+- src/components/AssistantCommandCenterScreen.tsx
+- src/components/mission/MissionShell.tsx
+- src/components/mission/NerdDeviceDiscoveryMission.tsx
+- src/lib/network/assistantIntelligence.ts
+- docs/TASK_LEDGER.md
+
+### Goal
+Verify and polish the selected-device/operator workflow so mission-control and assistant surfaces stay truthful, stable, and useful.
+
+### Verified outcomes
+- selected-device context flow tightened between MissionShell and assistant/discovery surfaces
+- device-detail/operator workflow refined in mission control
+- assistant selected-device summaries/recommendations improved
+- action/result and per-device detail handling likely clarified
+- scope remained inside operator workflow surfaces
+- no shell/auth/server drift introduced
+
+### Remaining manual limitation
+- full live operator workflow still remains auth-gated in this environment and needs signed-in runtime verification
