@@ -486,7 +486,7 @@ export function AssistantCommandCenterScreen({
                   title="What changed?"
                   body={
                     selectedDeviceHistory.length > 0
-                      ? selectedDeviceHistory.map((item) => `${item.title}: ${item.body}`).join(' ')
+                      ? selectedDeviceHistory.map((item) => `${item.eventType}: ${item.message ?? 'No extra detail recorded.'}`).join(' ')
                       : 'No recent stored events are linked to this device yet.'
                   }
                 />
