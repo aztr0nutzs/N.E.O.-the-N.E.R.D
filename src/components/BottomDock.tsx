@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Wifi, Battery, Shield, Zap, Cpu, Activity, Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNeuralSystem } from '../context/NeuralContext';
+import dockShell from '../../bottom_dock.png';
 
 export interface BottomDockActions {
   onNetworkClick?: () => void;
@@ -113,7 +114,7 @@ export function BottomDock({
   ];
 
   return (
-    <div className="relative w-full h-24 flex flex-col items-center">
+    <div className="relative w-full h-28 flex flex-col items-center">
       {/* Transcript Overlay */}
       <AnimatePresence>
         {isListening && lastTranscript && (
@@ -130,11 +131,13 @@ export function BottomDock({
       </AnimatePresence>
 
       {/* Main Dock Body */}
-      <div className="dock-chassis relative w-[95%] h-16 bg-[linear-gradient(180deg,rgba(31,35,44,0.96),rgba(21,24,31,0.98))] border-2 border-[#3a3f47] rounded-lg flex items-center justify-around px-4 shadow-[0_18px_34px_rgba(0,0,0,0.42)] overflow-hidden">
-        {/* Metallic Texture */}
-        <div className="absolute inset-0 opacity-10 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(0,255,255,0.08),transparent_42%)] pointer-events-none" />
-        <div className="absolute left-4 right-4 top-0 h-[2px] bg-gradient-to-r from-transparent via-cyber-blue/35 to-transparent pointer-events-none" />
+      <div className="relative w-[min(96vw,760px)] h-[86px] flex items-center justify-center overflow-visible">
+        <img
+          src={dockShell}
+          alt="Futuristic dock shell"
+          className="pointer-events-none absolute inset-0 w-full h-full object-contain select-none drop-shadow-[0_18px_30px_rgba(0,0,0,0.6)]"
+        />
+        <div className="absolute inset-x-[4.5%] top-[22%] h-[56%] rounded-2xl border border-cyan-300/20 bg-[linear-gradient(180deg,rgba(8,12,17,0.72),rgba(8,8,12,0.82))] shadow-[inset_0_0_18px_rgba(0,255,255,0.1)]" />
         
         {/* Center hub — opens assistant command center when wired; otherwise decorative only. */}
         {onCommandCenterClick ? (
@@ -145,7 +148,7 @@ export function BottomDock({
             title="Assistant command center — shortcuts to chat, mission logs, network, and settings"
             whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.97 }}
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 bg-[linear-gradient(180deg,#111318,#090b0f)] rounded-full border-2 border-cyber-blue/45 flex items-center justify-center z-20 shadow-[0_0_26px_rgba(0,255,255,0.22)] cursor-pointer hover:border-cyber-blue/70"
+            className="absolute left-1/2 top-[49%] -translate-x-1/2 -translate-y-1/2 w-[68px] h-[68px] bg-[linear-gradient(180deg,#111318,#090b0f)] rounded-full border-2 border-cyber-blue/45 flex items-center justify-center z-20 shadow-[0_0_26px_rgba(0,255,255,0.22)] cursor-pointer hover:border-cyber-blue/70"
           >
             <div className="w-10 h-10 rounded-full border border-cyber-blue/55 flex items-center justify-center shadow-[0_0_18px_rgba(0,255,255,0.14)_inset]">
               <div className="w-6 h-6 rounded-full bg-cyber-blue/25 flex items-center justify-center shadow-[0_0_18px_rgba(0,255,255,0.14)]">
@@ -159,7 +162,7 @@ export function BottomDock({
             />
           </motion.button>
         ) : (
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 bg-[linear-gradient(180deg,#111318,#090b0f)] rounded-full border-2 border-[#3a3f47] flex items-center justify-center z-20 shadow-[0_0_24px_rgba(0,0,0,0.5)]">
+          <div className="absolute left-1/2 top-[49%] -translate-x-1/2 -translate-y-1/2 w-[68px] h-[68px] bg-[linear-gradient(180deg,#111318,#090b0f)] rounded-full border-2 border-[#3a3f47] flex items-center justify-center z-20 shadow-[0_0_24px_rgba(0,0,0,0.5)]">
             <div className="w-10 h-10 rounded-full border border-cyber-blue/45 flex items-center justify-center shadow-[0_0_18px_rgba(0,255,255,0.12)_inset]">
               <div className="w-6 h-6 rounded-full bg-cyber-blue/20 flex items-center justify-center shadow-[0_0_18px_rgba(0,255,255,0.12)]">
                 <div className="w-2 h-2 rounded-full bg-cyber-blue shadow-[0_0_10px_#00ffff]" />
@@ -174,37 +177,22 @@ export function BottomDock({
         )}
 
         {/* Slots Left */}
-        <div className="flex gap-2 z-10">
+        <div className="absolute left-[6.5%] top-[30%] flex gap-2 z-10">
           {slots.slice(0, 3).map((slot, i) => (
             <DockSlot key={`left-${i}`} {...slot} />
           ))}
         </div>
 
-        {/* Spacer for Center */}
-        <div className="w-16" />
-
         {/* Slots Right */}
-        <div className="flex gap-2 z-10">
+        <div className="absolute right-[6.5%] top-[30%] flex gap-2 z-10">
           {slots.slice(3).map((slot, i) => (
             <DockSlot key={`right-${i}`} {...slot} />
-          ))}
-        </div>
-
-        {/* Decorative Lights */}
-        <div className="absolute bottom-1 left-1/4 flex gap-1">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="w-1 h-1 rounded-full bg-orange-500/50 shadow-[0_0_5px_#f97316]" />
-          ))}
-        </div>
-        <div className="absolute bottom-1 right-1/4 flex gap-1">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="w-1 h-1 rounded-full bg-orange-500/50 shadow-[0_0_5px_#f97316]" />
           ))}
         </div>
       </div>
 
       {/* Label Bar */}
-      <div className="mt-1 bg-[linear-gradient(180deg,#1a1d24,#12151b)] border-x-2 border-b-2 border-[#3a3f47] px-6 py-0.5 rounded-b-lg shadow-lg">
+      <div className="-mt-1 bg-[linear-gradient(180deg,#1a1d24,#12151b)] border-x-2 border-b-2 border-[#3a3f47] px-6 py-0.5 rounded-b-lg shadow-lg">
         <span className="text-[10px] font-mono font-black italic tracking-[0.24em] text-gray-400 uppercase">
           NERD LAUNCHER
         </span>
@@ -246,7 +234,7 @@ function DockSlot({ icon, color, label, title, active, low, onClick, displayOnly
     </>
   );
 
-  const baseChrome = `w-10 h-12 rounded border ${active ? borderColor : 'border-gray-700'} bg-[linear-gradient(180deg,rgba(0,0,0,0.48),rgba(9,11,15,0.74))] flex items-center justify-center relative overflow-hidden group`;
+  const baseChrome = `w-10 h-11 rounded-md border ${active ? borderColor : 'border-gray-700'} bg-[linear-gradient(180deg,rgba(0,0,0,0.56),rgba(5,8,13,0.88))] flex items-center justify-center relative overflow-hidden group`;
 
   if (displayOnly || !onClick) {
     return (

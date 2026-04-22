@@ -5,12 +5,13 @@ import { SidePanelLeft } from './components/SidePanelLeft';
 import { SidePanelRight } from './components/SidePanelRight';
 import { BottomDock } from './components/BottomDock';
 import { NerdLogin } from './components/NerdLogin';
-import { NerdLogo } from './components/NerdLogo';
 import { Power, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getClientSafeMessage, loginWithGoogle, logout } from './authClient';
 import { NeuralProvider, useNeuralAuth, useNeuralRealtime, useNeuralSystem, useNeuralUi } from './context/NeuralContext';
 import type { MissionTab } from './components/mission/MissionShell';
+import topMarquee from '../top_marquee.png';
+import pedestalStage from '../pedestal.png';
 
 const Robot2D = lazy(() => import('./components/Robot2D').then(module => ({ default: module.Robot2D })));
 const ChatInterface = lazy(() => import('./components/ChatInterface').then(module => ({ default: module.ChatInterface })));
@@ -375,30 +376,39 @@ function AppContent() {
           <SystemStats onOpenDiagnostics={() => toggleWindow('diagnostics')} />
         </div>
 
-        {/* Top Right: NERD Logo & Power */}
-        <div className="absolute top-6 right-4 z-30 flex flex-col items-end gap-2">
-           <NerdLogo />
-           <div className="flex items-center gap-2">
-             {isGuestMode && (
-               <div className="flex items-center gap-1 bg-black/45 border border-neon-green/40 px-2 py-0.5 rounded text-[8px] font-mono text-neon-green uppercase tracking-widest">
-                 <div className="w-1 h-1 bg-neon-green rounded-full" />
-                 Guest mode · local session only
-               </div>
-             )}
-             {isSystemsReady && (
-               <div className="flex items-center gap-1 bg-black/40 border border-cyber-blue/30 px-2 py-0.5 rounded text-[8px] font-mono text-cyber-blue uppercase tracking-widest animate-pulse">
-                 <div className="w-1 h-1 bg-cyber-blue rounded-full" />
-                 Local sensors live
-               </div>
-             )}
-             <button 
-               onClick={isGuestMode ? exitGuestMode : logout}
-               className="text-red-500 hover:text-red-400 hover:bg-red-500/10 p-1.5 rounded transition-colors border border-transparent hover:border-red-500/30"
-               title={isGuestMode ? 'Exit guest mode' : 'Disconnect'}
-             >
-               <Power className="w-4 h-4" />
-             </button>
-           </div>
+        {/* Top Marquee Region */}
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 w-[min(94vw,740px)]">
+          <div className="relative rounded-xl border border-cyber-blue/35 bg-black/45 p-2 shadow-[0_0_28px_rgba(0,255,255,0.22)]">
+            <img
+              src={topMarquee}
+              alt="N.E.O. the N.E.R.D. marquee"
+              className="w-full h-auto object-contain drop-shadow-[0_0_26px_rgba(0,255,255,0.22)]"
+            />
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(0,255,255,0.16),transparent_55%)]" />
+          </div>
+        </div>
+
+        {/* Top Right: session status + power */}
+        <div className="absolute top-4 right-4 z-40 flex items-center gap-2">
+          {isGuestMode && (
+            <div className="flex items-center gap-1 bg-black/45 border border-neon-green/40 px-2 py-0.5 rounded text-[8px] font-mono text-neon-green uppercase tracking-widest">
+              <div className="w-1 h-1 bg-neon-green rounded-full" />
+              Guest mode · local session only
+            </div>
+          )}
+          {isSystemsReady && (
+            <div className="flex items-center gap-1 bg-black/40 border border-cyber-blue/30 px-2 py-0.5 rounded text-[8px] font-mono text-cyber-blue uppercase tracking-widest animate-pulse">
+              <div className="w-1 h-1 bg-cyber-blue rounded-full" />
+              Local sensors live
+            </div>
+          )}
+          <button 
+            onClick={isGuestMode ? exitGuestMode : logout}
+            className="text-red-500 hover:text-red-400 hover:bg-red-500/10 p-1.5 rounded transition-colors border border-transparent hover:border-red-500/30"
+            title={isGuestMode ? 'Exit guest mode' : 'Disconnect'}
+          >
+            <Power className="w-4 h-4" />
+          </button>
         </div>
 
         {/* Left Side Panel */}
@@ -417,8 +427,15 @@ function AppContent() {
            <SidePanelRight onToggleSettings={() => setMissionHub('settings')} />
         </div>
 
-        {/* Center Robot */}
-        <div className="absolute top-[10%] left-1/2 -translate-x-1/2 w-full h-[50%] z-20">
+        {/* Center Stage + Robot */}
+        <div className="absolute top-[16%] left-1/2 -translate-x-1/2 w-full h-[52%] z-20">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
+            <img
+              src={pedestalStage}
+              alt="Futuristic pedestal stage"
+              className="w-[min(90vw,430px)] max-w-[72%] h-auto object-contain drop-shadow-[0_0_34px_rgba(255,140,0,0.28)]"
+            />
+          </div>
           <Suspense fallback={<div className="w-full h-full flex items-center justify-center"><div className="w-8 h-8 border-2 border-cyber-blue border-t-transparent rounded-full animate-spin"></div></div>}>
             <Robot2D />
           </Suspense>
