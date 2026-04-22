@@ -471,7 +471,7 @@ function AppContent() {
         <div className="absolute bottom-4 left-0 right-0 z-40">
           <BottomDock
             onCommandCenterClick={() => setMissionHub('assistant')}
-            onNetworkClick={() => setMissionHub('discovery')}
+            onNetworkClick={() => setMissionHub('triage')}
             onDiagnosticsClick={() => toggleWindow('diagnostics')}
             onSensorsClick={() => toggleWindow('sensors')}
             onTerminalClick={() => toggleWindow('terminal')}

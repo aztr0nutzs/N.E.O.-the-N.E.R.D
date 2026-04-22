@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Brain, Radar, SlidersHorizontal, X } from 'lucide-react';
+import { Brain, ListTodo, Radar, SlidersHorizontal, X } from 'lucide-react';
 
 const AssistantCommandCenterScreen = lazy(() =>
   import('../AssistantCommandCenterScreen').then((m) => ({ default: m.AssistantCommandCenterScreen }))
@@ -11,8 +11,11 @@ const NerdDeviceDiscoveryMission = lazy(() =>
 const SettingsMatrixScreen = lazy(() =>
   import('../SettingsMatrixScreen').then((m) => ({ default: m.SettingsMatrixScreen }))
 );
+const MissionTriageScreen = lazy(() =>
+  import('./MissionTriageScreen').then((m) => ({ default: m.MissionTriageScreen }))
+);
 
-export type MissionTab = 'assistant' | 'discovery' | 'settings';
+export type MissionTab = 'assistant' | 'triage' | 'discovery' | 'settings';
 
 export interface MissionShellProps {
   initialTab: MissionTab;
@@ -57,6 +60,7 @@ function MissionNav({
       aria-label="Mission navigation"
     >
       {item('assistant', <Brain className="h-6 w-6" />, 'Assistant')}
+      {item('triage', <ListTodo className="h-6 w-6" />, 'Triage')}
       {item('discovery', <Radar className="h-6 w-6" />, 'Discovery')}
       {item('settings', <SlidersHorizontal className="h-6 w-6" />, 'Settings')}
     </nav>
@@ -133,11 +137,17 @@ export function MissionShell({
                   onExpandChat?.();
                 }}
                 onOpenMissionLogs={() => closeThen(onOpenMissionLogs)}
-                onOpenNetwork={() => select('discovery')}
+                onOpenNetwork={() => select('triage')}
                 onOpenSettings={() => select('settings')}
                 onOpenDiagnostics={() => closeThen(onOpenDiagnostics)}
                 onOpenSensors={() => closeThen(onOpenSensors)}
                 onOpenTerminal={() => closeThen(onOpenTerminal)}
+              />
+            )}
+            {tab === 'triage' && (
+              <MissionTriageScreen
+                selectedDeviceId={selectedDeviceId}
+                onSelectDevice={setSelectedDeviceId}
               />
             )}
             {tab === 'discovery' && (
