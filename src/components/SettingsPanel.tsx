@@ -21,6 +21,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const [voiceSearch, setVoiceSearch] = useState('');
   const [previewLoadingVoice, setPreviewLoadingVoice] = useState<string | null>(null);
+  const hasSpeechSynthesis = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
   useEffect(() => {
     setLocalAiSettings(aiSettings);
@@ -28,6 +29,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   }, [aiSettings, hudSettings]);
 
   useEffect(() => {
+    if (!hasSpeechSynthesis) {
+      setWebVoices([]);
+      return;
+    }
+
     const loadVoices = () => {
       setWebVoices(window.speechSynthesis.getVoices());
     };
@@ -36,7 +42,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     return () => {
       window.speechSynthesis.onvoiceschanged = null;
     };
-  }, []);
+  }, [hasSpeechSynthesis]);
 
   const showVoiceNote = useCallback((msg: string) => {
     setVoiceNote(msg);
@@ -45,6 +51,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   const voiceLibrary = buildVoiceLibrary({
     browserVoices: webVoices,
+    hasSpeechSynthesis,
     canUseServerVoices: Boolean(user),
     canPreviewServerVoices: Boolean(user) && localHudSettings.geminiVoicePreviewUsesApi,
   });
@@ -59,6 +66,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
       .toLowerCase()
       .includes(query);
   });
+
+  const groupedFilteredVoices = groupVoiceLibraryByProvider(filteredVoiceLibrary);
+
+  const getAvailabilityTone = (availability: VoiceLibraryEntry['availability']) => {
+    if (availability === 'available') return 'text-neon-green/90 border-neon-green/30 bg-neon-green/10';
+    if (availability === 'limited') return 'text-yellow-200 border-yellow-300/30 bg-yellow-300/10';
+    return 'text-red-200 border-red-300/30 bg-red-300/10';
+  };
 
   const previewVoiceByValue = useCallback(async (voiceValue: string) => {
     const voice = voiceLibrary.find((entry) => entry.value === voiceValue);
@@ -259,6 +274,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
       <div className="space-y-2 mt-2">
         <h3 className="text-fuchsia-500 border-b border-fuchsia-500/30 pb-1 uppercase tracking-widest">Voice library</h3>
+        <p className="text-[9px] text-gray-500 leading-relaxed">
+          Gemini server voices are always listed. Preview is truthful per provider: browser voices use Web Speech, Gemini voices use protected server TTS when signed in.
+        </p>
         <label className="flex items-start gap-2 text-[10px] text-gray-400 cursor-pointer leading-snug">
           <input
             type="checkbox"
@@ -354,53 +372,85 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         <div className="mt-3 space-y-2 border border-fuchsia-500/20 bg-black/20 rounded p-2">
           <div className="flex items-center justify-between gap-2 text-[10px] text-gray-400">
-            <span>Voice catalog ({voiceLibrary.length} total)</span>
+            <span>Library view ({voiceLibrary.length} voices)</span>
             <input
               value={voiceSearch}
               onChange={(e) => setVoiceSearch(e.target.value)}
-              placeholder="Search by name/provider/type/locale"
-              className="w-[52%] bg-black/60 border border-white/10 rounded px-2 py-1 text-[10px] focus:outline-none focus:border-fuchsia-500/60"
+              placeholder="Search name/provider/type/locale/style"
+              className="w-[55%] bg-black/60 border border-white/10 rounded px-2 py-1 text-[10px] focus:outline-none focus:border-fuchsia-500/60"
             />
           </div>
-          <div className="max-h-44 overflow-y-auto custom-scrollbar space-y-1 pr-1">
-            {filteredVoiceLibrary.map((voice) => {
-              const isSelectedDefault = localAiSettings.defaultVoice === voice.value;
+
+          <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-3 pr-1">
+            {(['gemini', 'browser'] as const).map((provider) => {
+              const voices = groupedFilteredVoices[provider];
+              const providerLabel = provider === 'gemini' ? 'Gemini / server voices' : 'Browser / system voices';
+              const providerNote = provider === 'gemini'
+                ? 'Always visible. Usage and preview require protected server access.'
+                : 'Discovered from this browser/device speech engine.';
+
               return (
-                <div
-                  key={`${voice.provider}-${voice.value}`}
-                  className={`flex items-center gap-2 rounded border px-2 py-1 text-[10px] ${
-                    isSelectedDefault
-                      ? 'border-fuchsia-400/70 bg-fuchsia-500/15'
-                      : 'border-white/10 bg-white/[0.03]'
-                  }`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="text-white/95 truncate">{voice.name}</div>
-                    <div className="text-gray-500 truncate">
-                      {voice.provider} · {voice.type} · {voice.locale ?? 'locale unknown'} · {voice.descriptor}
+                <div key={provider} className="rounded border border-white/10 bg-black/25 p-2 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.12em] text-fuchsia-300">{providerLabel}</div>
+                      <div className="text-[9px] text-gray-500">{providerNote}</div>
                     </div>
-                    <div
-                      className={`truncate ${
-                        voice.availability === 'available'
-                          ? 'text-neon-green/90'
-                          : voice.availability === 'limited'
-                            ? 'text-yellow-300/90'
-                            : 'text-red-300/90'
-                      }`}
-                    >
-                      {voice.availability}
-                      {voice.availabilityReason ? ` — ${voice.availabilityReason}` : ''}
-                    </div>
+                    <div className="text-[9px] text-gray-400">{voices.length} listed</div>
                   </div>
-                  <button
-                    type="button"
-                    disabled={!voice.previewSupported || previewLoadingVoice === voice.value}
-                    onClick={() => void previewVoiceByValue(voice.value)}
-                    className="p-1 bg-white/5 text-gray-300 rounded hover:text-white transition-colors disabled:opacity-30"
-                    title="Preview voice"
-                  >
-                    <Volume2 className="w-3 h-3" />
-                  </button>
+
+                  {voices.length === 0 ? (
+                    <div className="text-[10px] text-gray-500 py-1">
+                      {provider === 'browser'
+                        ? 'No browser voices matched this search (or none are installed on this device).'
+                        : 'No Gemini voices matched this search.'}
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {voices.map((voice) => {
+                        const isSelectedDefault = localAiSettings.defaultVoice === voice.value;
+                        return (
+                          <div
+                            key={`${voice.provider}-${voice.value}`}
+                            className={`rounded border px-2 py-1.5 text-[10px] ${
+                              isSelectedDefault
+                                ? 'border-fuchsia-400/70 bg-fuchsia-500/15'
+                                : 'border-white/10 bg-white/[0.03]'
+                            }`}
+                          >
+                            <div className="flex items-start gap-2">
+                              <div className="min-w-0 flex-1 space-y-0.5">
+                                <div className="text-white/95 truncate">{voice.name}</div>
+                                <div className="text-gray-500 truncate">
+                                  {voice.provider} · {voice.type} · {voice.locale ?? 'locale unknown'} · {voice.descriptor}
+                                </div>
+                                <div className={`inline-flex rounded border px-1.5 py-0.5 ${getAvailabilityTone(voice.availability)}`}>
+                                  {voice.availability}
+                                </div>
+                                <div className="text-gray-400 leading-relaxed">
+                                  {voice.availabilityReason ?? 'Fully available in current environment.'}
+                                </div>
+                                {!voice.previewSupported && (
+                                  <div className="text-yellow-200/90">
+                                    Preview disabled — {voice.previewUnavailableReason ?? 'Preview is not supported right now.'}
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                disabled={!voice.previewSupported || previewLoadingVoice === voice.value}
+                                onClick={() => void previewVoiceByValue(voice.value)}
+                                className="p-1 bg-white/5 text-gray-300 rounded hover:text-white transition-colors disabled:opacity-30"
+                                title="Preview voice"
+                              >
+                                <Volume2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}
