@@ -15,7 +15,7 @@ interface Task {
 }
 
 export function TaskLog() {
-  const { user } = useNeuralAuth();
+  const { user, isGuestMode } = useNeuralAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [error, setError] = useState('');
@@ -184,7 +184,7 @@ export function TaskLog() {
   if (!userId) {
     return (
       <div className="flex items-center justify-center h-full text-cyber-blue/50 font-mono text-sm text-center p-4">
-        AUTHENTICATION REQUIRED FOR MISSION LOGS
+        {isGuestMode ? 'GUEST MODE: SIGN IN TO SYNC MISSION LOGS' : 'AUTHENTICATION REQUIRED FOR MISSION LOGS'}
       </div>
     );
   }
