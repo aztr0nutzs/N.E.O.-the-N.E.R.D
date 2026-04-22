@@ -1,28 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Persona, useNeuralAuth, useNeuralUi } from '../context/NeuralContext';
-import { fetchProtectedJson, getClientSafeMessage } from '../authClient';
 import { Save, RefreshCw, Volume2, AlertTriangle, Info } from 'lucide-react';
-
-const GEMINI_VOICES = [
-  'Puck',
-  'Charon',
-  'Kore',
-  'Fenrir',
-  'Aoede',
-  'Zephyr'
-];
-
-interface AiChatResponse {
-  error?: string;
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{
-        text?: string;
-        inlineData?: { data?: string };
-      }>;
-    };
-  }>;
-}
+import { buildVoiceLibrary, groupVoiceLibraryByProvider, VoiceLibraryEntry } from '../lib/voices/voiceLibrary';
+import { previewVoice } from '../lib/voices/voicePreview';
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const { user } = useNeuralAuth();
@@ -39,7 +19,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [localHudSettings, setLocalHudSettings] = useState(hudSettings);
   const [webVoices, setWebVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
-  const [geminiPreviewLoading, setGeminiPreviewLoading] = useState(false);
+  const [voiceSearch, setVoiceSearch] = useState('');
+  const [previewLoadingVoice, setPreviewLoadingVoice] = useState<string | null>(null);
 
   useEffect(() => {
     setLocalAiSettings(aiSettings);
@@ -62,57 +43,38 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     window.setTimeout(() => setVoiceNote(null), 5000);
   }, []);
 
-  const playGeminiPreviewFromApi = useCallback(async (voiceName: string) => {
-    setGeminiPreviewLoading(true);
-    try {
-      const data = await fetchProtectedJson<AiChatResponse>('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'gemini-2.5-flash-preview-tts',
-          contents: [{ parts: [{ text: `Say in a neutral tone: Voice check. This is ${voiceName}.` }] }],
-          config: {
-            responseModalities: ['AUDIO' as const],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName },
-              },
-            },
-          },
-        }),
-      });
+  const voiceLibrary = buildVoiceLibrary({
+    browserVoices: webVoices,
+    canUseServerVoices: Boolean(user),
+    canPreviewServerVoices: Boolean(user) && localHudSettings.geminiVoicePreviewUsesApi,
+  });
 
-      const base64Audio = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (!base64Audio) {
-        showVoiceNote('Server returned no audio for this preview.');
-        return;
-      }
+  const groupedVoices = groupVoiceLibraryByProvider(voiceLibrary);
 
-      const audioData = atob(base64Audio);
-      const arrayBuffer = new ArrayBuffer(audioData.length);
-      const view = new Uint8Array(arrayBuffer);
-      for (let i = 0; i < audioData.length; i += 1) {
-        view[i] = audioData.charCodeAt(i);
-      }
+  const filteredVoiceLibrary = voiceLibrary.filter((voice) => {
+    const query = voiceSearch.trim().toLowerCase();
+    if (!query) return true;
+    return [voice.name, voice.provider, voice.type, voice.locale ?? '', voice.descriptor]
+      .join(' ')
+      .toLowerCase()
+      .includes(query);
+  });
 
-      const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      const audioBuffer = audioContext.createBuffer(1, view.length / 2, 24000);
-      const channelData = audioBuffer.getChannelData(0);
-      const int16View = new Int16Array(arrayBuffer);
-      for (let i = 0; i < int16View.length; i += 1) {
-        channelData[i] = int16View[i] / 32768;
-      }
-      const source = audioContext.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContext.destination);
-      source.start();
-      showVoiceNote('Playing Gemini TTS preview from server.');
-    } catch (error) {
-      showVoiceNote(getClientSafeMessage(error, 'Preview failed. Check sign-in and network.'));
-    } finally {
-      setGeminiPreviewLoading(false);
+  const previewVoiceByValue = useCallback(async (voiceValue: string) => {
+    const voice = voiceLibrary.find((entry) => entry.value === voiceValue);
+    if (!voice) {
+      showVoiceNote('Selected voice is not available in the current library.');
+      return;
     }
-  }, [showVoiceNote]);
+
+    setPreviewLoadingVoice(voiceValue);
+    try {
+      const result = await previewVoice(voice);
+      showVoiceNote(result.message);
+    } finally {
+      setPreviewLoadingVoice(null);
+    }
+  }, [voiceLibrary, showVoiceNote]);
 
   const handleSave = () => {
     updateAISettings(localAiSettings);
@@ -132,33 +94,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     }));
   };
 
-  const testVoice = (voiceName: string) => {
-    if (GEMINI_VOICES.includes(voiceName)) {
-      if (user && localHudSettings.geminiVoicePreviewUsesApi) {
-        void playGeminiPreviewFromApi(voiceName);
-        return;
-      }
-      const utterance = new SpeechSynthesisUtterance(`Browser preview only — not ${voiceName} model voice.`);
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance);
-      if (!user) {
-        showVoiceNote('Sign in to run a real Gemini voice preview via the server.');
-      } else {
-        showVoiceNote('API preview disabled — turn on “Gemini voice preview uses server” below.');
-      }
-      return;
-    }
-
-    const voice = webVoices.find(v => v.voiceURI === voiceName);
-    if (voice) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(`Testing local voice ${voice.name}`);
-      utterance.voice = voice;
-      window.speechSynthesis.speak(utterance);
-      showVoiceNote('Playing local Web Speech voice.');
-    } else {
-      showVoiceNote('Voice not found in this browser.');
-    }
+  const getVoiceOptionLabel = (voice: VoiceLibraryEntry) => {
+    const localePart = voice.locale ? ` · ${voice.locale}` : '';
+    return `${voice.name} (${voice.provider}/${voice.type})${localePart}`;
   };
 
   return (
@@ -349,25 +287,25 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               onChange={(e) => setLocalAiSettings(prev => ({ ...prev, defaultVoice: e.target.value }))}
               className="flex-1 bg-black/50 border border-white/10 rounded p-1 focus:outline-none focus:border-fuchsia-500/50"
             >
-              <optgroup label="Gemini high-fidelity voices">
-                {GEMINI_VOICES.map(v => (
-                  <option key={v} value={v}>
-                    {v}
+              <optgroup label={`Gemini / server (${groupedVoices.gemini.length})`}>
+                {groupedVoices.gemini.map(voice => (
+                  <option key={voice.value} value={voice.value}>
+                    {getVoiceOptionLabel(voice)}
                   </option>
                 ))}
               </optgroup>
-              <optgroup label="Local system voices">
-                {webVoices.map(v => (
-                  <option key={v.voiceURI} value={v.voiceURI}>
-                    {v.name}
+              <optgroup label={`Browser / local (${groupedVoices.browser.length})`}>
+                {groupedVoices.browser.map(voice => (
+                  <option key={voice.value} value={voice.value}>
+                    {getVoiceOptionLabel(voice)}
                   </option>
                 ))}
               </optgroup>
             </select>
             <button
               type="button"
-              disabled={geminiPreviewLoading}
-              onClick={() => testVoice(localAiSettings.defaultVoice)}
+              disabled={Boolean(previewLoadingVoice)}
+              onClick={() => void previewVoiceByValue(localAiSettings.defaultVoice)}
               className="p-1.5 bg-fuchsia-500/20 text-fuchsia-500 rounded hover:bg-fuchsia-500 hover:text-black transition-colors disabled:opacity-40"
               title="Test voice"
             >
@@ -386,25 +324,25 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 onChange={(e) => handlePersonaVoiceChange(persona, e.target.value)}
                 className="flex-1 bg-black/50 border border-white/10 rounded p-1 text-[10px] focus:outline-none focus:border-fuchsia-500/50"
               >
-                <optgroup label="Gemini high-fidelity voices">
-                  {GEMINI_VOICES.map(v => (
-                    <option key={v} value={v}>
-                      {v}
+                <optgroup label={`Gemini / server (${groupedVoices.gemini.length})`}>
+                  {groupedVoices.gemini.map(voice => (
+                    <option key={voice.value} value={voice.value}>
+                      {getVoiceOptionLabel(voice)}
                     </option>
                   ))}
                 </optgroup>
-                <optgroup label="Local system voices">
-                  {webVoices.map(v => (
-                    <option key={v.voiceURI} value={v.voiceURI}>
-                      {v.name}
+                <optgroup label={`Browser / local (${groupedVoices.browser.length})`}>
+                  {groupedVoices.browser.map(voice => (
+                    <option key={voice.value} value={voice.value}>
+                      {getVoiceOptionLabel(voice)}
                     </option>
                   ))}
                 </optgroup>
               </select>
               <button
                 type="button"
-                disabled={geminiPreviewLoading}
-                onClick={() => testVoice(localAiSettings.personaVoices[persona])}
+                disabled={Boolean(previewLoadingVoice)}
+                onClick={() => void previewVoiceByValue(localAiSettings.personaVoices[persona])}
                 className="p-1 bg-white/5 text-gray-400 rounded hover:text-white transition-colors disabled:opacity-40"
                 title="Test voice"
               >
@@ -412,6 +350,64 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               </button>
             </div>
           ))}
+        </div>
+
+        <div className="mt-3 space-y-2 border border-fuchsia-500/20 bg-black/20 rounded p-2">
+          <div className="flex items-center justify-between gap-2 text-[10px] text-gray-400">
+            <span>Voice catalog ({voiceLibrary.length} total)</span>
+            <input
+              value={voiceSearch}
+              onChange={(e) => setVoiceSearch(e.target.value)}
+              placeholder="Search by name/provider/type/locale"
+              className="w-[52%] bg-black/60 border border-white/10 rounded px-2 py-1 text-[10px] focus:outline-none focus:border-fuchsia-500/60"
+            />
+          </div>
+          <div className="max-h-44 overflow-y-auto custom-scrollbar space-y-1 pr-1">
+            {filteredVoiceLibrary.map((voice) => {
+              const isSelectedDefault = localAiSettings.defaultVoice === voice.value;
+              return (
+                <div
+                  key={`${voice.provider}-${voice.value}`}
+                  className={`flex items-center gap-2 rounded border px-2 py-1 text-[10px] ${
+                    isSelectedDefault
+                      ? 'border-fuchsia-400/70 bg-fuchsia-500/15'
+                      : 'border-white/10 bg-white/[0.03]'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-white/95 truncate">{voice.name}</div>
+                    <div className="text-gray-500 truncate">
+                      {voice.provider} · {voice.type} · {voice.locale ?? 'locale unknown'} · {voice.descriptor}
+                    </div>
+                    <div
+                      className={`truncate ${
+                        voice.availability === 'available'
+                          ? 'text-neon-green/90'
+                          : voice.availability === 'limited'
+                            ? 'text-yellow-300/90'
+                            : 'text-red-300/90'
+                      }`}
+                    >
+                      {voice.availability}
+                      {voice.availabilityReason ? ` — ${voice.availabilityReason}` : ''}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!voice.previewSupported || previewLoadingVoice === voice.value}
+                    onClick={() => void previewVoiceByValue(voice.value)}
+                    className="p-1 bg-white/5 text-gray-300 rounded hover:text-white transition-colors disabled:opacity-30"
+                    title="Preview voice"
+                  >
+                    <Volume2 className="w-3 h-3" />
+                  </button>
+                </div>
+              );
+            })}
+            {filteredVoiceLibrary.length === 0 && (
+              <div className="text-[10px] text-gray-500 py-2">No voices matched your search.</div>
+            )}
+          </div>
         </div>
       </div>
 
