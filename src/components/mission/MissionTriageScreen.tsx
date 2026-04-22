@@ -240,6 +240,9 @@ export function MissionTriageScreen({ selectedDeviceId = null, onSelectDevice }:
       setTimeline(null);
       setIntel(null);
       setLastScan(null);
+      setBusyAction(null);
+      setError(null);
+      setLoading(false);
       return;
     }
 
