@@ -1,10 +1,14 @@
 <div align="center">
-  <img src="./nerd_header3.png" alt="N.E.O. header" width="1200" />
+  <img src="./nerd_header5.png" alt="N.E.O. header" width="1200" />
 </div>
 
 # N.E.O. — Neural Environment Operator
 
 N.E.O. is a sci-fi styled assistant interface built with React + Vite, backed by Supabase for authentication/data and an Express server that proxies protected Gemini AI routes.
+
+<div align="center">
+  <img src="./nerd_header3.png" alt="N.E.O. header" width="1200" />
+</div>
 
 ## Features
 
@@ -44,6 +48,11 @@ N.E.O. is a sci-fi styled assistant interface built with React + Vite, backed by
 - `src/context/NeuralContext.tsx` — Runtime/auth wiring for the app shell.
 - `src/components/TaskLog.tsx` / `src/components/ChatInterface.tsx` — Task + chat user interfaces.
 - `android/` — Capacitor Android project.
+
+<div align="center">
+  <img src="./nerd_header4.png" alt="N.E.O. header" width="1200" />
+</div>
+
 
 ## Prerequisites
 
