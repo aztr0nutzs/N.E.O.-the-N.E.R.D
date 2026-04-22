@@ -44,7 +44,10 @@ const playPcm16Audio = (pcm16Data: Int16Array) => {
 
 export const previewVoice = async (voice: VoiceLibraryEntry): Promise<VoicePreviewResult> => {
   if (!voice.previewSupported) {
-    return { ok: false, message: voice.availabilityReason ?? 'Preview unavailable for this voice in current environment.' };
+    return {
+      ok: false,
+      message: voice.previewUnavailableReason ?? voice.availabilityReason ?? 'Preview unavailable for this voice in current environment.',
+    };
   }
 
   if (voice.previewMode === 'server') {

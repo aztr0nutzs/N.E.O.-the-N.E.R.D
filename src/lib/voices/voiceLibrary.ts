@@ -13,17 +13,20 @@ export interface VoiceLibraryEntry {
   availability: VoiceAvailability;
   availabilityReason: string | null;
   previewSupported: boolean;
+  previewUnavailableReason: string | null;
   previewMode: 'server' | 'browser' | 'none';
 }
 
 interface BuildVoiceLibraryOptions {
   browserVoices: SpeechSynthesisVoice[];
+  hasSpeechSynthesis: boolean;
   canUseServerVoices: boolean;
   canPreviewServerVoices: boolean;
 }
 
 export const buildVoiceLibrary = ({
   browserVoices,
+  hasSpeechSynthesis,
   canUseServerVoices,
   canPreviewServerVoices,
 }: BuildVoiceLibraryOptions): VoiceLibraryEntry[] => {
@@ -37,21 +40,32 @@ export const buildVoiceLibrary = ({
     availability: canUseServerVoices ? 'available' : 'limited',
     availabilityReason: canUseServerVoices ? null : 'Requires sign-in to use protected server routes.',
     previewSupported: canPreviewServerVoices,
+    previewUnavailableReason: canUseServerVoices
+      ? 'Enable “Gemini voice preview uses server TTS” to preview this voice.'
+      : 'Sign in to preview Gemini voices with protected server routes.',
     previewMode: canPreviewServerVoices ? 'server' : 'none',
   }));
 
-  const browserVoiceEntries: VoiceLibraryEntry[] = browserVoices.map((voice) => ({
-    value: voice.voiceURI,
-    name: voice.name,
-    provider: 'browser',
-    type: 'system',
-    locale: voice.lang || null,
-    descriptor: voice.localService ? 'Local voice' : 'Remote voice',
-    availability: 'available',
-    availabilityReason: null,
-    previewSupported: true,
-    previewMode: 'browser',
-  }));
+  const browserVoiceEntries: VoiceLibraryEntry[] = browserVoices.map((voice) => {
+    const browserAvailability: VoiceAvailability = hasSpeechSynthesis ? 'available' : 'unavailable';
+    const browserAvailabilityReason = hasSpeechSynthesis
+      ? null
+      : 'Browser speech synthesis is unavailable in this environment.';
+
+    return {
+      value: voice.voiceURI,
+      name: voice.name,
+      provider: 'browser',
+      type: 'system',
+      locale: voice.lang || null,
+      descriptor: voice.localService ? 'Local voice' : 'Remote voice',
+      availability: browserAvailability,
+      availabilityReason: browserAvailabilityReason,
+      previewSupported: hasSpeechSynthesis,
+      previewUnavailableReason: hasSpeechSynthesis ? null : browserAvailabilityReason,
+      previewMode: hasSpeechSynthesis ? 'browser' : 'none',
+    };
+  });
 
   return [...geminiVoices, ...browserVoiceEntries].sort((a, b) => {
     if (a.provider !== b.provider) {
