@@ -23,6 +23,11 @@ N.E.O. is a sci-fi styled assistant interface built with React + Vite, backed by
   - Live center component is `Robot2D`.
   - Core frame/HUD composition is intentionally preserved.
 
+<div align="center">
+  <img src="./nerd_header2.png" alt="N.E.O. header" width="1200" />
+</div>
+
+
 ## Tech Stack
 
 - **Frontend:** React 19, TypeScript, Vite 6
@@ -139,5 +144,9 @@ npm run preview
 - `Robot3D` is intentionally parked and should remain disabled unless explicitly requested.
 
 ---
+<div align="center">
+  <img src="./nerd_header1.png" alt="N.E.O. header" width="1200" />
+</div>
+
 
 If you are onboarding to this repo, start with **Environment Configuration**, then run **Local Development**, and validate the **Expected Runtime Verification** flow end-to-end.
