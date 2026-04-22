@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { useNeural } from '../context/NeuralContext';
+import { isGeminiVoiceName } from '../lib/voices/voiceCatalog';
 
 export function useGeminiLive() {
   const { aiSettings, setNeuralSurge } = useNeural();
@@ -37,7 +38,7 @@ export function useGeminiLive() {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
       
       const voiceName = aiSettings.personaVoices[persona as any] || aiSettings.defaultVoice;
-      const isGeminiVoice = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede', 'Zephyr'].includes(voiceName);
+      const isGeminiVoice = isGeminiVoiceName(voiceName);
       const selectedVoice = isGeminiVoice ? voiceName : 'Zephyr'; // Fallback to Zephyr for Live API
 
       const sessionPromise = ai.live.connect({

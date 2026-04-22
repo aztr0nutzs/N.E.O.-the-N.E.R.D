@@ -9,6 +9,7 @@ import {
   formatAssistantNetworkResponse,
   isNetworkAssistantPrompt,
 } from '../lib/network';
+import { isGeminiVoiceName } from '../lib/voices/voiceCatalog';
 
 interface Message {
   id?: string;
@@ -296,7 +297,7 @@ export function ChatInterface({
 
   const speakText = async (text: string) => {
     const voiceName = aiSettings.personaVoices[persona] || aiSettings.defaultVoice;
-    const isGeminiVoice = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede', 'Zephyr'].includes(voiceName);
+    const isGeminiVoice = isGeminiVoiceName(voiceName);
 
     if (isGeminiVoice) {
       // Use gemini-2.5-flash-preview-tts for high quality TTS via server
