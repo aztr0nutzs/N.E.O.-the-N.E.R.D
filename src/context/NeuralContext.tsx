@@ -15,6 +15,10 @@ export interface AISettings {
   personaVoices: Record<Persona, string>;
 }
 
+export type AppSessionMode = 'signed_out' | 'guest' | 'authenticated';
+
+const SESSION_MODE_STORAGE_KEY = 'neoSessionMode';
+
 /** Local-only HUD / motion preferences (this device). Not synced to Supabase. */
 export interface HudSettings {
   /** 0 = calm shell motion, 1 = full intensity (hotspots, modals, aura pulse). */
@@ -53,9 +57,13 @@ const defaultAISettings: AISettings = {
 
 interface NeuralContextType {
   user: User | null;
+  sessionMode: AppSessionMode;
+  isGuestMode: boolean;
   authLoading: boolean;
   authError: string | null;
   setAuthError: (message: string | null) => void;
+  continueAsGuest: () => void;
+  exitGuestMode: () => void;
   audioData: Uint8Array;
   userPosition: { x: number; y: number };
   isSystemsReady: boolean;
@@ -77,7 +85,10 @@ interface NeuralContextType {
   effectiveHudMotionScale: number;
 }
 
-type NeuralAuthContextType = Pick<NeuralContextType, 'user' | 'authLoading' | 'authError' | 'setAuthError'>;
+type NeuralAuthContextType = Pick<
+  NeuralContextType,
+  'user' | 'sessionMode' | 'isGuestMode' | 'authLoading' | 'authError' | 'setAuthError' | 'continueAsGuest' | 'exitGuestMode'
+>;
 type NeuralSystemsContextType = Pick<NeuralContextType, 'isSystemsReady' | 'isListening' | 'lastTranscript' | 'systemsWarning' | 'systemsError' | 'startSystems' | 'toggleListening'>;
 type NeuralRealtimeContextType = Pick<NeuralContextType, 'audioData' | 'userPosition'>;
 type NeuralUiContextType = Pick<
@@ -102,6 +113,7 @@ export function NeuralProvider({ children }: { children: ReactNode }) {
   const systems = useNeuralSystems();
   const [neuralSurge, setNeuralSurge] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [sessionMode, setSessionMode] = useState<AppSessionMode>('signed_out');
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [currentModel, setCurrentModel] = useState('gemini-3-flash-preview');
@@ -167,7 +179,15 @@ export function NeuralProvider({ children }: { children: ReactNode }) {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return;
-      setUser(session?.user ?? null);
+      const nextUser = session?.user ?? null;
+      setUser(nextUser);
+      if (nextUser) {
+        sessionStorage.removeItem(SESSION_MODE_STORAGE_KEY);
+      }
+      setSessionMode((currentMode) => {
+        if (nextUser) return 'authenticated';
+        return currentMode === 'guest' ? 'guest' : 'signed_out';
+      });
       if (session?.user) {
         setAuthError(null);
       }
@@ -188,9 +208,19 @@ export function NeuralProvider({ children }: { children: ReactNode }) {
             console.error('Auth session bootstrap failed:', error);
           }
           setUser(null);
+          const persistedMode = sessionStorage.getItem(SESSION_MODE_STORAGE_KEY);
+          setSessionMode(persistedMode === 'guest' ? 'guest' : 'signed_out');
           setAuthError(getClientSafeMessage(error, 'Sign-in session could not be restored.'));
         } else {
-          setUser(data.session?.user ?? null);
+          const restoredUser = data.session?.user ?? null;
+          setUser(restoredUser);
+          if (restoredUser) {
+            sessionStorage.removeItem(SESSION_MODE_STORAGE_KEY);
+            setSessionMode('authenticated');
+          } else {
+            const persistedMode = sessionStorage.getItem(SESSION_MODE_STORAGE_KEY);
+            setSessionMode(persistedMode === 'guest' ? 'guest' : 'signed_out');
+          }
         }
       } finally {
         if (isMounted) {
@@ -206,12 +236,28 @@ export function NeuralProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const continueAsGuest = useCallback(() => {
+    setUser(null);
+    setAuthError(null);
+    sessionStorage.setItem(SESSION_MODE_STORAGE_KEY, 'guest');
+    setSessionMode('guest');
+  }, []);
+
+  const exitGuestMode = useCallback(() => {
+    sessionStorage.removeItem(SESSION_MODE_STORAGE_KEY);
+    setSessionMode('signed_out');
+  }, []);
+
   const authValue = useMemo(() => ({
     user,
+    sessionMode,
+    isGuestMode: sessionMode === 'guest',
     authLoading,
     authError,
-    setAuthError
-  }), [user, authLoading, authError]);
+    setAuthError,
+    continueAsGuest,
+    exitGuestMode,
+  }), [user, sessionMode, authLoading, authError, continueAsGuest, exitGuestMode]);
 
   const systemsValue = useMemo(() => ({
     isSystemsReady: systems.isSystemsReady,

@@ -169,7 +169,16 @@ export default function App() {
 function AppContent() {
   const { isSystemsReady, startSystems, lastTranscript, systemsWarning, systemsError } = useNeuralSystem();
   const { audioData, userPosition } = useNeuralRealtime();
-  const { user, authLoading, authError, setAuthError } = useNeuralAuth();
+  const {
+    user,
+    sessionMode,
+    isGuestMode,
+    continueAsGuest,
+    exitGuestMode,
+    authLoading,
+    authError,
+    setAuthError,
+  } = useNeuralAuth();
   const { effectiveHudMotionScale, hudSettings } = useNeuralUi();
   const [missionHub, setMissionHub] = useState<MissionTab | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -289,10 +298,11 @@ function AppContent() {
     );
   }
 
-  if (!user) {
+  if (sessionMode === 'signed_out') {
     return (
       <NerdLogin
         onLogin={handleLogin}
+        onContinueAsGuest={continueAsGuest}
         isAuthenticating={isAuthenticating}
         authError={authError}
       />
@@ -369,6 +379,12 @@ function AppContent() {
         <div className="absolute top-6 right-4 z-30 flex flex-col items-end gap-2">
            <NerdLogo />
            <div className="flex items-center gap-2">
+             {isGuestMode && (
+               <div className="flex items-center gap-1 bg-black/45 border border-neon-green/40 px-2 py-0.5 rounded text-[8px] font-mono text-neon-green uppercase tracking-widest">
+                 <div className="w-1 h-1 bg-neon-green rounded-full" />
+                 Guest mode · local session only
+               </div>
+             )}
              {isSystemsReady && (
                <div className="flex items-center gap-1 bg-black/40 border border-cyber-blue/30 px-2 py-0.5 rounded text-[8px] font-mono text-cyber-blue uppercase tracking-widest animate-pulse">
                  <div className="w-1 h-1 bg-cyber-blue rounded-full" />
@@ -376,9 +392,9 @@ function AppContent() {
                </div>
              )}
              <button 
-               onClick={logout}
+               onClick={isGuestMode ? exitGuestMode : logout}
                className="text-red-500 hover:text-red-400 hover:bg-red-500/10 p-1.5 rounded transition-colors border border-transparent hover:border-red-500/30"
-               title="Disconnect"
+               title={isGuestMode ? 'Exit guest mode' : 'Disconnect'}
              >
                <Power className="w-4 h-4" />
              </button>

@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 
 interface NerdLoginProps {
   onLogin: () => Promise<void> | void;
+  onContinueAsGuest: () => void;
   isAuthenticating: boolean;
   authError: string | null;
 }
@@ -58,7 +59,7 @@ function useLoginBootVideoPreference(): boolean {
   return allow;
 }
 
-export function NerdLogin({ onLogin, isAuthenticating, authError }: NerdLoginProps) {
+export function NerdLogin({ onLogin, onContinueAsGuest, isAuthenticating, authError }: NerdLoginProps) {
   const allowBootVideo = useLoginBootVideoPreference();
   const arcMarks = useMemo(
     () =>
@@ -324,22 +325,24 @@ export function NerdLogin({ onLogin, isAuthenticating, authError }: NerdLoginPro
             <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[rgba(114,220,255,0.25)] to-transparent" />
           </div>
 
-          <div
-            className="flex w-full cursor-not-allowed flex-col items-center justify-center gap-2 rounded-2xl border-2 border-[rgba(47,248,1,0.35)] bg-[rgba(0,12,5,0.88)] px-6 py-4 opacity-80 backdrop-blur-sm"
-            aria-disabled
+          <button
+            type="button"
+            onClick={onContinueAsGuest}
+            disabled={isAuthenticating}
+            className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-[rgba(47,248,1,0.35)] bg-[rgba(0,12,5,0.88)] px-6 py-4 opacity-85 backdrop-blur-sm transition hover:border-[rgba(47,248,1,0.7)] hover:shadow-[0_0_24px_rgba(47,248,1,0.22)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span className="text-[10px] font-black italic uppercase tracking-[0.2em] text-[rgba(47,248,1,0.9)]">
-              Neural link offline
+              Continue as guest
             </span>
             <span className="text-center text-[9px] leading-relaxed text-zinc-500">
-              Post-sign-in shell unlocks sensors, chat, and mission hub. No alternate login path here.
+              Local shell session only. Cloud sync, Supabase history, and protected AI routes require sign-in.
             </span>
             <div className="flex gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-[#2ff801] shadow-[0_0_8px_#2ff801]" style={{ animation: 'neo-alo 1.2s ease-in-out infinite' }} />
               <span className="h-1.5 w-1.5 rounded-full bg-[rgba(47,248,1,0.3)]" />
               <span className="h-1.5 w-1.5 rounded-full bg-[rgba(47,248,1,0.1)]" />
             </div>
-          </div>
+          </button>
 
           {authError && (
             <div className="rounded-lg border border-red-500/70 bg-red-500/15 px-4 py-3 text-left">

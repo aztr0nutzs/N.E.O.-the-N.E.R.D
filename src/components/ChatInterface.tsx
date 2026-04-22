@@ -63,6 +63,7 @@ const PERSONA_CONFIGS = {
 
 const DEFAULT_GREETING = 'Systems online. All protocols active. How may I assist you today, sir?';
 const SIGNED_OUT_MESSAGE = 'Secure link offline. Sign in again to continue.';
+const GUEST_MODE_MESSAGE = 'Guest mode active. Sign in to use cloud history and protected AI routes.';
 const HISTORY_SYNC_MESSAGE = 'Mission log sync unavailable. Local display may be incomplete.';
 const VIDEO_POLL_INTERVAL_MS = 5000;
 const MAX_VIDEO_POLL_ATTEMPTS = 24;
@@ -115,7 +116,7 @@ export function ChatInterface({
   onOpenSettings,
   onOpenAssistantMission,
 }: ChatInterfaceProps = {}) {
-  const { user } = useNeuralAuth();
+  const { user, isGuestMode } = useNeuralAuth();
   const { isListening, toggleListening, lastTranscript } = useNeuralSystem();
   const { setNeuralSurge, aiSettings, setCurrentModel } = useNeuralUi();
   const [persona, setPersona] = useState<Persona>('NEO');
@@ -128,6 +129,7 @@ export function ChatInterface({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
   const userId = user?.id;
+  const cloudUnavailableMessage = isGuestMode ? GUEST_MODE_MESSAGE : SIGNED_OUT_MESSAGE;
   const requestVersionRef = useRef(0);
   const messagesLoadGenerationRef = useRef(0);
 
@@ -426,7 +428,7 @@ export function ChatInterface({
 
   const clearHistory = async () => {
     if (!userId) {
-      appendLocalAssistantMessage(SIGNED_OUT_MESSAGE);
+      appendLocalAssistantMessage(cloudUnavailableMessage);
       return;
     }
 
@@ -469,7 +471,7 @@ export function ChatInterface({
     if (e) e.preventDefault();
     if ((!input.trim() && !selectedFile) || isLoading) return;
     if (!userId) {
-      appendLocalAssistantMessage(SIGNED_OUT_MESSAGE);
+      appendLocalAssistantMessage(cloudUnavailableMessage);
       return;
     }
 
@@ -827,11 +829,17 @@ export function ChatInterface({
               <ChevronDown className="w-3 h-3" />
             </button>
           )}
-          <div className={`text-[10px] font-mono text-${activeColor} animate-pulse flex items-center gap-1 tracking-[0.18em]`}>
-            <Shield className="w-3 h-3" /> SECURE LINK
+          <div className={`text-[10px] font-mono ${isGuestMode ? 'text-neon-green' : `text-${activeColor}`} animate-pulse flex items-center gap-1 tracking-[0.18em]`}>
+            <Shield className="w-3 h-3" /> {isGuestMode ? 'GUEST LINK' : 'SECURE LINK'}
           </div>
         </div>
       </div>
+
+      {isGuestMode && (
+        <div className="mb-2 mx-4 rounded border border-neon-green/30 bg-neon-green/10 px-2.5 py-2 text-[10px] font-mono text-neon-green">
+          Guest mode: local session only. Cloud history, Supabase persistence, and protected AI routes require sign-in.
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-1.5 mb-3 items-center px-4">
         <button onClick={() => setMode('standard')} className={`p-1.5 rounded-sm flex items-center gap-1 text-[10px] font-mono tracking-[0.16em] transition-all ${mode === 'standard' ? 'bg-cyber-blue text-black shadow-[0_0_8px_#00ffff]' : 'text-cyber-blue hover:bg-cyber-blue/18 border border-transparent hover:border-cyber-blue/20'}`} title="Standard Chat"><Terminal className="w-3 h-3" /> STD</button>
